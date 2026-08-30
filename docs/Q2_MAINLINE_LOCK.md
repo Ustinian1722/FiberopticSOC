@@ -23,12 +23,14 @@ The paper should look and read like a strong recent Energy / Journal of Energy S
 ### Core model
 Working name: **ETMF-Net** (Electrical–ThermoMechanical Fusion Network).
 
-1. Electrical branch: multi-scale causal TCN for fast V/I dynamics.
-2. Thermo-mechanical branch: GRU/lightweight temporal encoder for slower T/F evolution.
+1. Electrical branch: multi-scale causal TCN for fast load-driven V/I transients.
+2. Thermo-mechanical branch: GRU/lightweight temporal encoder for stateful T/F evolution that is weakly coupled to instantaneous current jumps.
 3. Adaptive cross-gated latent fusion: learn sample/window-dependent electrical and thermo-mechanical interactions.
 4. SOC regression head.
 
 The final method should remain compact. A second large Transformer/Mamba stack is not required.
+
+Data diagnostics do **not** support a blanket claim that T/F simply evolves more slowly than voltage after normalization. The defensible distinction is dynamic-response role: voltage responds strongly to current jumps, whereas T/F is comparatively insensitive to instantaneous load changes and provides complementary internal-state information.
 
 ### Required experimental hierarchy
 
