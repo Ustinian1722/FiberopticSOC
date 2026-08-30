@@ -67,13 +67,7 @@ jobs:
           if [ -f results/sequence_representation/cross_rate_results.csv ]; then
             echo "## Causal FBG representation benchmark" >> "$GITHUB_STEP_SUMMARY"
             echo '```text' >> "$GITHUB_STEP_SUMMARY"
-            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import pandas as pd
-          p = "results/sequence_representation/cross_rate_results.csv"
-          df = pd.read_csv(p)
-          cols = ["split","model","MAE","RMSE","R2","MaxAE","Q95_AE","params"]
-          print(df[cols].sort_values(["split","MAE"]).to_string(index=False))
-          PY
+            python -c 'import pandas as pd; d=pd.read_csv("results/sequence_representation/cross_rate_results.csv"); c=["split","model","MAE","RMSE","R2","MaxAE","Q95_AE","params"]; print(d[c].sort_values(["split","MAE"]).to_string(index=False))' >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
 
