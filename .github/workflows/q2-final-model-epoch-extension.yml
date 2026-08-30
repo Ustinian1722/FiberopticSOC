@@ -1,4 +1,4 @@
-name: Q2 final-model source-only epoch extension
+name: Q2 frozen raw-W source-only epoch extension
 
 on:
   workflow_dispatch:
@@ -25,48 +25,61 @@ jobs:
         name: Validate frozen extension plan
         shell: bash
         run: |
+          test -f config/Q2_REPRESENTATION_FREEZE.md
+          test -f config/q2_raw_w_source_epoch_audit_seed42.csv
           test -f config/q2_final_model_epoch_extension_plan.json
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
+          import pandas as pd
           from pathlib import Path
 
-          allowed_models = {
-              "IUW-TCN", "IUTF-TCN", "IUWwhite-TCN", "IUTFwhite-TCN",
-              "ETMF-W", "ETMF-TF", "ETMF-Wwhite", "ETMF-TFwhite",
-          }
           allowed_rates = {"1C", "2C"}
           allowed_profiles = {"HWFET", "LA92", "NEDC", "NYCC", "US06", "WLTC"}
-
           plan = json.loads(Path("config/q2_final_model_epoch_extension_plan.json").read_text())
-          model = plan.get("model")
+          if plan.get("frozen_model") != "IUW-TCN":
+              raise SystemExit("The representation freeze permits only IUW-TCN")
           entries = plan.get("entries", [])
-          if model not in allowed_models:
-              raise SystemExit(f"Invalid final model: {model!r}")
           if not entries:
-              raise SystemExit("Extension plan must contain at least one entry")
+              raise SystemExit("Extension plan must contain at least one ceiling-bound inner fold")
+
+          baseline = pd.read_csv("config/q2_raw_w_source_epoch_audit_seed42.csv")
+          baseline["hit_max_epoch"] = baseline["hit_max_epoch"].astype(str).str.lower().eq("true")
+          eligible = {
+              (r.direction.split("_to_")[0], r.main_held_out_profile, r.inner_val_profile)
+              for r in baseline.itertuples(index=False)
+              if r.hit_max_epoch
+          }
 
           include = []
           seen = set()
           for raw in entries:
               rate = raw.get("train_rate")
-              profile = raw.get("held_out_profile")
+              outer = raw.get("held_out_profile")
+              inner = raw.get("inner_val_profile")
               max_epochs = int(raw.get("max_epochs", 100))
-              key = (rate, profile)
-              if rate not in allowed_rates:
-                  raise SystemExit(f"Invalid train_rate: {rate!r}")
-              if profile not in allowed_profiles:
-                  raise SystemExit(f"Invalid held_out_profile: {profile!r}")
+              key = (rate, outer, inner)
+              if rate not in allowed_rates or outer not in allowed_profiles or inner not in allowed_profiles:
+                  raise SystemExit(f"Invalid extension entry: {key}")
+              if outer == inner:
+                  raise SystemExit(f"Outer and inner profiles cannot match: {key}")
+              if key not in eligible:
+                  raise SystemExit(f"Entry was not ceiling-bound in the frozen 60-epoch audit: {key}")
               if key in seen:
                   raise SystemExit(f"Duplicate extension entry: {key}")
-              if max_epochs < 20 or max_epochs > 200:
-                  raise SystemExit(f"max_epochs outside registered range [20,200]: {max_epochs}")
+              if max_epochs <= 60 or max_epochs > 200:
+                  raise SystemExit(f"max_epochs must be in [61,200], got {max_epochs}")
               seen.add(key)
               include.append({
-                  "model": model,
                   "train_rate": rate,
-                  "held_out_profile": profile,
+                  "held_out_profile": outer,
+                  "inner_val_profile": inner,
                   "max_epochs": max_epochs,
               })
+
+          if seen != eligible:
+              missing = sorted(eligible - seen)
+              extra = sorted(seen - eligible)
+              raise SystemExit(f"Plan must extend every and only frozen ceiling fold; missing={missing}, extra={extra}")
 
           print("matrix=" + json.dumps({"include": include}, separators=(",", ":")))
           PY
@@ -75,10 +88,10 @@ jobs:
     needs: prepare
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 7
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 120
     env:
       OMP_NUM_THREADS: "4"
       MKL_NUM_THREADS: "4"
@@ -97,21 +110,21 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scipy==1.17.1 scikit-learn==1.8.0
           python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
-      - name: Run source-only extension
+      - name: Extend one source-only ceiling fold
         run: |
           python analysis/run_q2_final_model_epoch_extension.py \
             --data data/extracted/SiC-18 \
-            --out-dir results/q2_final_model_epoch_extension/${{ matrix.train_rate }}_${{ matrix.held_out_profile }} \
-            --model "${{ matrix.model }}" \
+            --out-dir results/q2_final_model_epoch_extension/${{ matrix.train_rate }}_${{ matrix.held_out_profile }}_${{ matrix.inner_val_profile }} \
             --train-rate "${{ matrix.train_rate }}" \
             --held-out-profile "${{ matrix.held_out_profile }}" \
+            --inner-val-profile "${{ matrix.inner_val_profile }}" \
             --max-epochs ${{ matrix.max_epochs }} \
             --window 64 --train-stride 4 --val-stride 1 --batch-size 256 \
-            --min-epochs 12 --patience 10 --min-delta 0.00005 --lr 0.001 --seed 42
+            --min-epochs 12 --patience 8 --min-delta 0.00005 --lr 0.001 --seed 42
       - uses: actions/upload-artifact@v4
         with:
-          name: q2-final-epoch-${{ matrix.train_rate }}-${{ matrix.held_out_profile }}
-          path: results/q2_final_model_epoch_extension/${{ matrix.train_rate }}_${{ matrix.held_out_profile }}/**
+          name: q2-final-epoch-${{ matrix.train_rate }}-${{ matrix.held_out_profile }}-${{ matrix.inner_val_profile }}
+          path: results/q2_final_model_epoch_extension/${{ matrix.train_rate }}_${{ matrix.held_out_profile }}_${{ matrix.inner_val_profile }}/**
           retention-days: 45
 
   aggregate:
@@ -119,6 +132,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           pattern: q2-final-epoch-*
@@ -126,29 +140,85 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m pip install --disable-pip-version-check pandas==2.3.2
-      - name: Aggregate selected epochs
+      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2
+      - name: Merge old non-ceiling folds with extensions
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
+          import numpy as np
           import pandas as pd
 
-          files = sorted(Path("collected").rglob("selected_epoch.csv"))
+          base = pd.read_csv("config/q2_raw_w_source_epoch_audit_seed42.csv")
+          base["hit_max_epoch"] = base["hit_max_epoch"].astype(str).str.lower().eq("true")
+          files = sorted(Path("collected").rglob("fold_extension.csv"))
           if not files:
-              raise SystemExit("No selected_epoch.csv artifacts found")
-          out = pd.concat([pd.read_csv(p) for p in files], ignore_index=True)
-          out = out.sort_values(["train_rate", "held_out_profile", "model"])
+              raise SystemExit("No fold_extension.csv artifacts found")
+          ext = pd.concat([pd.read_csv(p) for p in files], ignore_index=True)
+          ext["hit_max_epoch"] = ext["hit_max_epoch"].astype(str).str.lower().eq("true")
+
+          key = ["direction", "main_held_out_profile", "inner_val_profile"]
+          if ext.duplicated(key).any():
+              raise SystemExit("Duplicate extension keys")
+          base_keys = base.set_index(key)
+          ext_keys = ext.set_index(key)
+          missing = [k for k in ext_keys.index if k not in base_keys.index]
+          if missing:
+              raise SystemExit(f"Extension keys absent from baseline: {missing}")
+          not_ceiling = [k for k in ext_keys.index if not bool(base_keys.loc[k, "hit_max_epoch"])]
+          if not_ceiling:
+              raise SystemExit(f"Attempted to replace non-ceiling folds: {not_ceiling}")
+
+          merged = base.copy()
+          for r in ext.itertuples(index=False):
+              mask = (
+                  (merged.direction == r.direction)
+                  & (merged.main_held_out_profile == r.main_held_out_profile)
+                  & (merged.inner_val_profile == r.inner_val_profile)
+              )
+              merged.loc[mask, "best_epoch"] = int(r.best_epoch)
+              merged.loc[mask, "best_val_MAE"] = float(r.best_val_MAE)
+              merged.loc[mask, "stopped_epoch"] = int(r.stopped_epoch)
+              merged.loc[mask, "hit_max_epoch"] = bool(r.hit_max_epoch)
+
+          rows = []
+          for (direction, outer), g in merged.groupby(["direction", "main_held_out_profile"], sort=True):
+              epochs = g.best_epoch.to_numpy(dtype=int)
+              maes = g.best_val_MAE.to_numpy(dtype=float)
+              rows.append({
+                  "direction": direction,
+                  "held_out_profile": outer,
+                  "model": "IUW-TCN",
+                  "seed": 42,
+                  "selected_epoch": int(np.median(epochs)),
+                  "fold_best_epoch_min": int(epochs.min()),
+                  "fold_best_epoch_median": float(np.median(epochs)),
+                  "fold_best_epoch_max": int(epochs.max()),
+                  "fold_best_MAE_mean": float(maes.mean()),
+                  "fold_best_MAE_std": float(maes.std(ddof=1)),
+                  "folds_hit_max": int(g.hit_max_epoch.astype(bool).sum()),
+                  "source_only": True,
+                  "target_metrics_computed": False,
+              })
+
+          summary = pd.DataFrame(rows).sort_values(["direction", "held_out_profile"])
+          remaining = merged[merged.hit_max_epoch.astype(bool)].copy()
           Path("summary").mkdir(exist_ok=True)
-          out.to_csv("summary/source_only_epoch_extension.csv", index=False)
-          print(out.to_string(index=False))
+          merged.to_csv("summary/merged_raw_w_fold_epochs.csv", index=False)
+          summary.to_csv("summary/source_only_epoch_plan.csv", index=False)
+          remaining.to_csv("summary/remaining_ceiling_folds.csv", index=False)
+          print(summary.to_string(index=False))
+          print(f"remaining ceiling folds: {len(remaining)}")
           PY
       - name: Publish summary
         shell: bash
         run: |
-          echo "## Q2 source-only final-model epoch extension" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Q2 frozen IUW-TCN source-only epoch extension" >> "$GITHUB_STEP_SUMMARY"
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
-          cat summary/source_only_epoch_extension.csv >> "$GITHUB_STEP_SUMMARY"
+          cat summary/source_only_epoch_plan.csv >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo "Remaining ceiling folds:" >> "$GITHUB_STEP_SUMMARY"
+          cat summary/remaining_ceiling_folds.csv >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
