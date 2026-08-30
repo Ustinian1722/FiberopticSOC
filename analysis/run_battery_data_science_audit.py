@@ -23,13 +23,19 @@ K = np.array([[0.0208, 0.00054], [0.0254, 0.00085]], dtype=float)
 
 def load_files(root: Path):
     rows = []
-    for path in sorted(root.glob("*.xlsx")):
+    # The public archive contains an internal SiC-18/ directory. Use rglob so the
+    # audit works both on a flat manual extraction and on the archive's native tree.
+    paths = sorted(root.rglob("*.xlsx"))
+    for path in paths:
         stem = path.stem
         profile, rate = stem.rsplit("_", 1)
         df = pd.read_excel(path)
         rows.append((path.name, profile, rate, df))
     if len(rows) != 12:
-        raise RuntimeError(f"Expected 12 workbooks, found {len(rows)} in {root}")
+        found = [str(p.relative_to(root)) for p in paths]
+        raise RuntimeError(
+            f"Expected 12 workbooks, found {len(rows)} in {root}; discovered={found}"
+        )
     return rows
 
 
