@@ -2,10 +2,6 @@ name: Q2 final T4 multiseed benchmark
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "config/q2_frozen_epoch_plan.csv"
 
 permissions:
   contents: read
