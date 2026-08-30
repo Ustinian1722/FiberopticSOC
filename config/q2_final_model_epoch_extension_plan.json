@@ -3,6 +3,7 @@
   "development_seed": 42,
   "baseline_max_epochs": 60,
   "extension_max_epochs": 100,
+  "validator_retry": 1,
   "selection_rule": "source-only inner-profile validation; replace only folds that hit the frozen 60-epoch ceiling; outer selected epoch is median of five inner-fold best epochs",
   "entries": [
     {"train_rate":"1C","held_out_profile":"LA92","inner_val_profile":"US06","max_epochs":100},
