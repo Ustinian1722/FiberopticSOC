@@ -78,12 +78,16 @@ def main() -> None:
             train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=0)
             test_loader = DataLoader(test_ds, batch_size=args.batch_size * 2, shuffle=False, num_workers=0)
 
+            # Factories are intentional. Reset the seed BEFORE construction so every
+            # parameter-matched model receives an initialization drawn from the same
+            # RNG state. Previously models were constructed up front, so inserting a
+            # new control changed the initial weights of all later models.
             configs = (
-                ("VI", ParameterMatchedVITCN()),
-                ("VI+W", PairTCN((2, 3))),
-                ("VI+W-white", PairTCN((2, 3), w_white)),
-                ("VI+TF", PairTCN((4, 5))),
-                ("VI+TF-white", PairTCN((4, 5), tf_white)),
+                ("VI", lambda: ParameterMatchedVITCN()),
+                ("VI+W", lambda: PairTCN((2, 3))),
+                ("VI+W-white", lambda: PairTCN((2, 3), w_white)),
+                ("VI+TF", lambda: PairTCN((4, 5))),
+                ("VI+TF-white", lambda: PairTCN((4, 5), tf_white)),
             )
             predictions = {}
             y_ref = None
@@ -93,8 +97,9 @@ def main() -> None:
                 f"\n=== {direction} held-out={held_out}: "
                 f"train_windows={len(train_ds)} test_windows={len(test_ds)} ==="
             )
-            for model_name, model in configs:
+            for model_name, factory in configs:
                 seed_everything(args.seed)
+                model = factory()
                 params[model_name] = count_params(model)
                 print(f"--- {model_name} params={params[model_name]} ---")
                 train_model(model, train_loader, device, args.epochs, args.lr)
