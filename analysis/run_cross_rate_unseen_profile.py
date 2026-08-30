@@ -70,6 +70,7 @@ def main() -> None:
             train_sources = normalize_sources(train_raw, mean, std)
             test_sources = normalize_sources(test_raw, mean, std)
             train_all = np.concatenate([s["x"] for s in train_sources], axis=0)
+            w_white = whitening_matrix(train_all[:, (2, 3)])
             tf_white = whitening_matrix(train_all[:, (4, 5)])
 
             train_ds = WindowDataset(train_sources, args.window, args.train_stride)
@@ -80,6 +81,7 @@ def main() -> None:
             configs = (
                 ("VI", ParameterMatchedVITCN()),
                 ("VI+W", PairTCN((2, 3))),
+                ("VI+W-white", PairTCN((2, 3), w_white)),
                 ("VI+TF", PairTCN((4, 5))),
                 ("VI+TF-white", PairTCN((4, 5), tf_white)),
             )
@@ -178,6 +180,7 @@ def main() -> None:
             meta["y"] = y_ref
             meta["pred_VI"] = predictions["VI"]
             meta["pred_VI+W"] = predictions["VI+W"]
+            meta["pred_VI+W-white"] = predictions["VI+W-white"]
             meta["pred_VI+TF"] = predictions["VI+TF"]
             meta["pred_VI+TF-white"] = predictions["VI+TF-white"]
             meta["pred_selective"] = selective
