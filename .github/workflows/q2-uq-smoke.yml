@@ -1,0 +1,61 @@
+name: Q2 UQ smoke test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "analysis/run_split_conformal_uq.py"
+      - ".github/workflows/q2-uq-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2
+      - name: Build deterministic synthetic calibration/test predictions
+        shell: bash
+        run: |
+          mkdir -p tmp/uq
+          python - <<'PY'
+          import numpy as np, pandas as pd
+          rng = np.random.default_rng(42)
+          y_cal = np.linspace(0.02, 0.98, 400)
+          p_cal = np.clip(y_cal + rng.normal(0, 0.01, len(y_cal)), 0, 1)
+          y_test = np.linspace(0.02, 0.98, 500)
+          p_test = np.clip(y_test + rng.normal(0, 0.01, len(y_test)), 0, 1)
+          pd.DataFrame({'y_true': y_cal, 'y_pred': p_cal}).to_csv('tmp/uq/cal.csv', index=False)
+          pd.DataFrame({'y_true': y_test, 'y_pred': p_test}).to_csv('tmp/uq/test.csv', index=False)
+          PY
+      - name: Run split conformal
+        run: |
+          python analysis/run_split_conformal_uq.py \
+            --calibration tmp/uq/cal.csv \
+            --test tmp/uq/test.csv \
+            --out-dir results/q2_uq_smoke \
+            --alphas 0.10 0.05
+      - name: Assert outputs and sane coverage
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          s = pd.read_csv('results/q2_uq_smoke/uq_summary.csv')
+          assert set(s['nominal_coverage'].round(2)) == {0.90, 0.95}
+          assert ((s['PICP'] > 0.84) & (s['PICP'] <= 1.0)).all(), s
+          assert (s['MPIW'] > 0).all(), s
+          print(s.to_string(index=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-uq-smoke
+          path: results/q2_uq_smoke/**
+          retention-days: 14
