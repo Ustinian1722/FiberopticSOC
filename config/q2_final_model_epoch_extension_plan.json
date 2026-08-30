@@ -1,0 +1,30 @@
+{
+  "frozen_model": "IUW-TCN",
+  "development_seed": 42,
+  "baseline_max_epochs": 60,
+  "extension_max_epochs": 100,
+  "selection_rule": "source-only inner-profile validation; replace only folds that hit the frozen 60-epoch ceiling; outer selected epoch is median of five inner-fold best epochs",
+  "entries": [
+    {"train_rate":"1C","held_out_profile":"LA92","inner_val_profile":"US06","max_epochs":100},
+    {"train_rate":"1C","held_out_profile":"NEDC","inner_val_profile":"US06","max_epochs":100},
+    {"train_rate":"1C","held_out_profile":"US06","inner_val_profile":"NYCC","max_epochs":100},
+    {"train_rate":"1C","held_out_profile":"WLTC","inner_val_profile":"NYCC","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"HWFET","inner_val_profile":"NYCC","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"HWFET","inner_val_profile":"US06","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"HWFET","inner_val_profile":"WLTC","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"LA92","inner_val_profile":"HWFET","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"LA92","inner_val_profile":"US06","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"LA92","inner_val_profile":"WLTC","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"NEDC","inner_val_profile":"LA92","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"NYCC","inner_val_profile":"HWFET","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"NYCC","inner_val_profile":"US06","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"NYCC","inner_val_profile":"WLTC","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"US06","inner_val_profile":"LA92","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"US06","inner_val_profile":"NYCC","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"WLTC","inner_val_profile":"HWFET","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"WLTC","inner_val_profile":"LA92","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"WLTC","inner_val_profile":"NEDC","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"WLTC","inner_val_profile":"NYCC","max_epochs":100},
+    {"train_rate":"2C","held_out_profile":"WLTC","inner_val_profile":"US06","max_epochs":100}
+  ]
+}
