@@ -48,7 +48,11 @@ def blocked_mixed_condition_split(
     """T1 interpolation split with deterministic contiguous blocks and guard gaps.
 
     Every physical trajectory contributes to train/validation/calibration/test, but no
-    random rows are used. Block identities repeat a fixed pattern over the trajectory.
+    random rows are used. Each trajectory receives the same 10/2/2/2 block allocation,
+    with a deterministic phase rotation across trajectories. The phase rotation prevents
+    validation/calibration/test from all occupying the same SOC subranges while keeping
+    the split reproducible and independent of SOC labels.
+
     At every set boundary, `window-1` rows are removed from each neighboring side so
     causal windows from different sets cannot share samples or immediate context.
 
@@ -58,21 +62,25 @@ def blocked_mixed_condition_split(
         raise ValueError("n_blocks must be >= 8")
     guard = window - 1
     # 10 train, 2 validation, 2 calibration, 2 test blocks per 16-block trajectory.
-    pattern = np.array(
+    base_pattern = np.array(
         ["train", "train", "test", "train", "cal", "train", "train", "val",
          "train", "test", "train", "train", "cal", "train", "val", "train"],
         dtype=object,
     )
-    if n_blocks != len(pattern):
+    if n_blocks != len(base_pattern):
         raise ValueError("Current frozen T1 protocol uses n_blocks=16")
 
     buckets = {"train": [], "val": [], "cal": [], "test": []}
-    for src in sources:
+    # Source ordering is deterministic because load_sources() follows sorted workbooks.
+    # Rotating by source index spreads held-out blocks across the full discharge range
+    # without consulting SOC values or any learned/test statistic.
+    for source_idx, src in enumerate(sources):
+        pattern = np.roll(base_pattern, source_idx % n_blocks)
         n = len(src["y"])
         edges = np.linspace(0, n, n_blocks + 1, dtype=int)
         labels = np.empty(n, dtype=object)
-        for b in range(n_blocks):
-            labels[edges[b]:edges[b + 1]] = pattern[b]
+        for block_idx in range(n_blocks):
+            labels[edges[block_idx]:edges[block_idx + 1]] = pattern[block_idx]
 
         for start, stop, label in _runs(labels):
             left_trim = guard if start > 0 and labels[start - 1] != label else 0
@@ -89,7 +97,7 @@ def blocked_mixed_condition_split(
             raise RuntimeError(f"T1 produced no {key} segments")
     return ProtocolSplit(
         name="T1_mixed_condition_blocked_interpolation",
-        split_id="T1_block16_guard_window",
+        split_id="T1_block16_phase_rotated_guard_window",
         train=buckets["train"],
         validation=buckets["val"],
         calibration=buckets["cal"],
