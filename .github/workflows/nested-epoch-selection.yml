@@ -16,7 +16,7 @@ jobs:
         train_rate: [1C, 2C]
         held_out: [HWFET, LA92, NEDC, NYCC, US06, WLTC]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
     env:
       OMP_NUM_THREADS: '4'
       MKL_NUM_THREADS: '4'
@@ -46,7 +46,7 @@ jobs:
             --train-rate ${{ matrix.train_rate }} \
             --held-out-profile ${{ matrix.held_out }} \
             --window 64 --train-stride 4 --val-stride 1 --test-stride 1 \
-            --max-epochs 15 --batch-size 256 --seed 42
+            --max-epochs 30 --batch-size 256 --seed 42
       - uses: actions/upload-artifact@v4
         with:
           name: nested-epoch-${{ matrix.train_rate }}-${{ matrix.held_out }}
@@ -88,7 +88,7 @@ jobs:
       - name: Publish summary
         shell: bash
         run: |
-          echo "## Nested train-only epoch-selection audit" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Nested train-only epoch-selection audit (max 30)" >> "$GITHUB_STEP_SUMMARY"
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
           python -c 'import pandas as pd; print(pd.read_csv("results/nested_epoch_aggregate/summary.csv").sort_values(["direction","MAE_mean"]).to_string(index=False)); print(); print(pd.read_csv("results/nested_epoch_aggregate/epoch_summary.csv").to_string(index=False))' >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
