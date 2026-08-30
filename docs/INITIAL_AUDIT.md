@@ -21,7 +21,7 @@ For 11/12 workbooks, the supplied SOC satisfies exactly:
 
 For `HWFET_1C.xlsx`, the maximum discrepancy from that relationship is only `2.77e-05` near the end of discharge. Therefore `dis_cap` must be excluded from all SOC-model inputs. Absolute elapsed time should also be excluded from the main model because each file is a single monotonic discharge trajectory and `Time_s` can act as a progress proxy.
 
-## Critical finding 2: temperature and force are deterministic transforms of the two FBG channels
+## Critical finding 2: temperature and force are deterministic, invertible transforms of the two FBG channels
 
 Across all 68,086 samples, ordinary least squares gives:
 
@@ -29,7 +29,15 @@ Across all 68,086 samples, ordinary least squares gives:
 
 `force_N = -6407.66902119071 * Wavelength_1 + 5247.22502522705 * Wavelength_2`
 
-Both equations have `R² = 1.000000` with numerical residuals on the order of `1e-13`. Hence `Wavelength_1/2`, `temperature`, and `force` are not four independent sensor channels. A paper should compare **raw FBG representation** (`W1,W2`) against **physics-decoupled representation** (`temperature,force`) as alternative representations, rather than concatenate all four and claim four-channel sensing.
+Both equations have `R² = 1.000000` with numerical residuals on the order of `1e-13`. The 2×2 transform has determinant `252270.4339`, so it is nonsingular and strictly invertible. Numerically, the inverse calibration is approximately:
+
+`Wavelength_1 = 0.0208 * temperature_℃ + 0.00054 * force_N`
+
+`Wavelength_2 = 0.0254 * temperature_℃ + 0.00085 * force_N`
+
+Therefore `(W1,W2)` and `(temperature,force)` contain exactly the same information for this release. A direct OLS verification under all leave-one-profile-out splits produced a maximum prediction difference of only `5.44e-15` between `VI+W` and `VI+TF`.
+
+This is stronger than simple redundancy: the two representations are mathematically information-equivalent. Any performance difference observed with nonlinear finite-capacity models should be interpreted as a **representation/conditioning/inductive-bias effect**, not as additional sensing information. A paper should compare raw FBG coordinates against physics-decoupled thermo-mechanical coordinates as alternative representations, rather than concatenate all four and claim four independent sensor channels.
 
 ## Critical finding 3: strong SOC relation exists, especially for mechanical force
 
@@ -61,7 +69,7 @@ A deliberately simple non-sequential `HistGradientBoostingRegressor` was used on
 | W | 0.025389 | 0.033330 | 0.986991 | 0.129876 |
 | V | 0.045140 | 0.058556 | 0.962934 | 0.168287 |
 
-`VI+TF` gives the best average MAE (`0.7691%` SOC fraction), improving over `VI` (`0.9320%`). Raw wavelengths (`VI+W`) are not uniformly better than `VI+TF`; their performance is less stable across held-out profiles, especially `NEDC_2C`.
+`VI+TF` gives the best average MAE (`0.7691%` SOC fraction), improving over `VI` (`0.9320%`). Raw wavelengths (`VI+W`) are not uniformly better than `VI+TF`; their performance is less stable across held-out profiles, especially `NEDC_2C`. Because `W` and `TF` are exactly invertible, this difference is a model-representation effect rather than a difference in available information.
 
 ### Cross-rate diagnostic
 
@@ -80,7 +88,7 @@ A deliberately simple non-sequential `HistGradientBoostingRegressor` was used on
 | 2C | 1C | W | 0.022892 | 0.030427 | 0.990181 | 0.124461 |
 | 2C | 1C | V | 0.051424 | 0.065333 | 0.954733 | 0.189230 |
 
-The 1C→2C direction is harder than 2C→1C. Raw wavelengths provide the best 1C→2C MAE in this simple diagnostic, whereas the decoupled temperature/force representation is best for 2C→1C.
+The 1C→2C direction is harder than 2C→1C. Raw wavelengths provide the best 1C→2C MAE in this simple diagnostic, whereas the decoupled temperature/force representation is best for 2C→1C. Again, because the transform is invertible, the asymmetry is attributable to the fitted model and feature geometry, not to information gain/loss.
 
 ## Recommended research framing
 
@@ -89,4 +97,5 @@ The 1C→2C direction is harder than 2C→1C. Raw wavelengths provide the best 1
 3. Main splits should be group-based: leave-one-profile-out and cross-rate. Never randomly split rows from the same discharge file.
 4. Exclude `dis_cap` and absolute `Time_s` from predictors. `dis_cap` reconstructs the label; `Time_s` is a trajectory-progress proxy.
 5. Next modeling step should use causal sequence windows and evaluate MAE, RMSE, MaxAE, R², and SOC-bin errors under the group splits above.
-6. A useful paper story is **raw optical sensing vs physics-decoupled thermo-mechanical sensing for robust cross-condition SOC estimation**, followed by representation fusion/gating only if it adds information beyond the deterministic transform.
+6. A strong paper story is **representation-aware optical SOC estimation**: raw optical coordinates versus physics-decoupled thermo-mechanical coordinates, with a model designed to exploit their equivalent information under different conditioning and domain shifts.
+7. Any proposed fusion/gating mechanism should be justified as improving optimization/robustness under domain shift, not as fusing four independent sensing modalities.
