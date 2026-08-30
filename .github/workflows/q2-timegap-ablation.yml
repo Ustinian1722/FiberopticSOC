@@ -13,7 +13,7 @@ permissions:
 jobs:
   ablation:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     env:
       OMP_NUM_THREADS: "4"
       MKL_NUM_THREADS: "4"
@@ -32,15 +32,15 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scikit-learn==1.8.0
           python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
-      - name: Run development ablation
+      - name: Run matched 20-epoch development ablation
         run: |
           python analysis/run_q2_timegap_ablation.py \
             --data data/extracted/SiC-18 \
             --out-dir results/q2_timegap_ablation \
-            --epochs 12 --window 64 --train-stride 4 --test-stride 1 \
+            --epochs 20 --window 64 --train-stride 4 --test-stride 1 \
             --batch-size 256 --seed 42
       - uses: actions/upload-artifact@v4
         with:
-          name: q2-timegap-ablation
+          name: q2-timegap-ablation-20ep
           path: results/q2_timegap_ablation/**
           retention-days: 30
