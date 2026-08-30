@@ -1,0 +1,102 @@
+name: Q2 nested epoch selection reverse
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/q2-nested-epoch-selection-reverse.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fiberoptic-q2-nested-epoch-selection-reverse
+  cancel-in-progress: true
+
+jobs:
+  select:
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        profile: [HWFET, LA92, NEDC, NYCC, US06, WLTC]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage and verify SiC-18 archive
+        run: |
+          mkdir -p data/extracted/SiC-18
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  SiC-18.zip" | sha256sum -c -
+          unzip -q SiC-18.zip -d data/extracted/SiC-18
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scipy==1.17.1 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Nested source-profile CV
+        run: |
+          python analysis/run_q2_nested_epoch_selection.py \
+            --data data/extracted/SiC-18 \
+            --out-dir results/q2_epoch_reverse/${{ matrix.profile }} \
+            --train-rate 2C \
+            --held-out-profile ${{ matrix.profile }} \
+            --models VI-MS-TCN,IUTF-StackedTCN,DualBranch-Direct-TF,ETMF-TF \
+            --window 64 --train-stride 4 --val-stride 1 --test-stride 1 \
+            --max-epochs 50 --min-epochs 10 --patience 7 --min-delta 0.00005 \
+            --batch-size 256 --seed 42
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-epoch-reverse-${{ matrix.profile }}
+          path: results/q2_epoch_reverse/${{ matrix.profile }}/**
+          retention-days: 30
+
+  aggregate:
+    needs: select
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: q2-epoch-reverse-*
+          path: collected
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --disable-pip-version-check pandas==2.3.2
+      - name: Aggregate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+          root=Path('collected'); out=Path('aggregate'); out.mkdir(exist_ok=True)
+          def cat(name):
+              xs=[pd.read_csv(p) for p in root.rglob(name)]
+              if not xs: raise SystemExit(f'no {name}')
+              return pd.concat(xs,ignore_index=True)
+          s=cat('selected_epochs.csv').sort_values(['held_out_profile','model'])
+          f=cat('fold_best_epochs.csv').sort_values(['main_held_out_profile','model','inner_val_profile'])
+          a=cat('development_test_audit.csv').sort_values(['held_out_profile','MAE'])
+          s.to_csv(out/'frozen_epoch_candidates.csv',index=False)
+          f.to_csv(out/'all_fold_best_epochs.csv',index=False)
+          a.to_csv(out/'development_test_audit.csv',index=False)
+          summary=s.groupby('model',as_index=False).agg(
+              selected_epoch_mean=('selected_epoch','mean'),
+              selected_epoch_min=('selected_epoch','min'),
+              selected_epoch_max=('selected_epoch','max'),
+              total_folds_hit_max=('folds_hit_max','sum'))
+          summary.to_csv(out/'epoch_plan_summary.csv',index=False)
+          print(s.to_string(index=False)); print(summary.to_string(index=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-frozen-epoch-candidates-reverse
+          path: aggregate/**
+          retention-days: 30
