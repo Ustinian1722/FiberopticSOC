@@ -1,0 +1,92 @@
+name: Q1 mainline prototype
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "analysis/run_q1_mainline_prototype.py"
+      - ".github/workflows/q1-mainline-prototype.yml"
+      - "SiC-18.zip"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fiberoptic-q1-mainline-prototype
+  cancel-in-progress: true
+
+jobs:
+  prototype:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Stage and verify SiC-18 archive
+        shell: bash
+        run: |
+          test -f SiC-18.zip
+          mkdir -p data/raw data/extracted/SiC-18
+          cp SiC-18.zip data/raw/SiC-18.zip
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  data/raw/SiC-18.zip" | sha256sum -c -
+          unzip -q data/raw/SiC-18.zip -d data/extracted/SiC-18
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scipy==1.17.1 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Run Q1 M1 prototype screen
+        run: |
+          python analysis/run_q1_mainline_prototype.py \
+            --data data/extracted/SiC-18 \
+            --out-dir results/q1_mainline_prototype \
+            --direction 1C_to_2C \
+            --window 64 \
+            --train-stride 4 \
+            --test-stride 1 \
+            --epochs 20 \
+            --batch-size 256 \
+            --seed 42 \
+            --max-residual 0.15
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f results/q1_mainline_prototype/aggregate_summary.csv ]; then
+            echo "## Q1 mainline M1 prototype" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import pandas as pd
+          root = 'results/q1_mainline_prototype'
+          a = pd.read_csv(f'{root}/aggregate_summary.csv')
+          print(a.sort_values(['direction','MAE_mean']).to_string(index=False))
+          g = pd.read_csv(f'{root}/gate_summary.csv')
+          if len(g):
+              print('\nGate summary:')
+              print(g.to_string(index=False))
+          PY
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: q1-mainline-prototype
+          path: results/q1_mainline_prototype/**
+          if-no-files-found: warn
+          retention-days: 30
