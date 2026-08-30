@@ -3,15 +3,15 @@
 Date: 2026-08-31
 Status: ACTIVE / FROZEN DIRECTION
 
-This document supersedes the previous Q1 expansion plan as the publication target for the current FiberopticSOC paper. The objective is a solid, non-trivial SCI Q2 paper with a familiar battery-SOC research structure, clear method contribution, strict leakage control, and complete generalization/robustness evidence. Scope expansion that is not necessary for this target is explicitly deferred.
+This document supersedes the previous Q1 expansion plan as the publication target for the current FiberopticSOC paper. The objective is a solid, non-trivial SCI Q2 paper with a familiar battery-SOC research structure, clear method contribution, strict leakage control, complete generalization/robustness evidence, and calibrated uncertainty quantification.
 
 ## 1. Paper target
 
 Target contribution style:
 
-> Dual-FBG thermo-mechanical assisted SOC estimation using heterogeneous temporal encoding and adaptive electrical–thermomechanical fusion, validated from conventional mixed-condition accuracy through unseen-profile and cross-rate generalization.
+> Dual-FBG thermo-mechanical assisted SOC estimation using heterogeneous temporal encoding and adaptive electrical–thermomechanical fusion, validated from conventional mixed-condition accuracy through unseen-profile and cross-rate generalization, with calibrated SOC prediction intervals.
 
-The paper should look and read like a strong recent Energy / Journal of Energy Storage / Journal of Power Sources style battery-AI paper, but should avoid being a trivial feature-concatenation or attention-stacking study.
+The paper should look and read like a strong recent Energy / Journal of Energy Storage / Journal of Power Sources style battery-AI paper, while avoiding trivial feature concatenation or attention stacking.
 
 ## 2. What is in scope
 
@@ -25,7 +25,7 @@ Working name: **ETMF-Net** (Electrical–ThermoMechanical Fusion Network).
 
 1. Electrical branch: multi-scale causal TCN for fast V/I dynamics.
 2. Thermo-mechanical branch: GRU/lightweight temporal encoder for slower T/F evolution.
-3. Adaptive gated latent fusion: learn the sample/window-dependent contribution of electrical and thermo-mechanical latent states.
+3. Adaptive cross-gated latent fusion: learn sample/window-dependent electrical and thermo-mechanical interactions.
 4. SOC regression head.
 
 The final method should remain compact. A second large Transformer/Mamba stack is not required.
@@ -59,7 +59,7 @@ At minimum:
 - I/U/W1/W2
 - single-stream IUTF model
 - dual-branch direct fusion
-- proposed adaptive fusion
+- proposed adaptive ETMF fusion
 
 These ablations answer three questions separately:
 1. Does internal sensing help?
@@ -99,11 +99,31 @@ Forbidden estimator inputs:
 
 Splits must be made by profile/rate/trajectory before any normalization or model selection.
 
-## 7. UQ policy
+## 7. Required UQ policy
 
-UQ is optional for the Q2 submission, not a blocking workstream.
+UQ is a **required component** of the Q2 manuscript, but it is executed only after the point estimator and its hyperparameters are frozen.
 
-If the point-estimation paper is already strong, add a lightweight split-conformal interval experiment as a reliability extension. Do not delay the paper to build a complex UQ framework.
+### UQ-U1: split conformal baseline
+- Use absolute point-prediction residuals as nonconformity scores.
+- Calibration samples come only from source-side training/validation data.
+- Evaluate at least nominal 90% and 95% coverage.
+
+### UQ-U2: CQR candidate
+- Add conformalized quantile regression only if it gives meaningfully more adaptive/narrower intervals while retaining calibrated coverage.
+- If CQR does not improve interval quality, retain the simpler split-conformal method in the paper.
+
+Required UQ metrics:
+- empirical coverage / PICP
+- coverage error
+- MPIW
+- PINAW
+- mean interval score
+- conditional coverage by SOC bin and load level
+- coverage under T1/T2/T3/T4 operating-condition shift
+
+Test SOC labels are evaluation-only and must never determine calibration quantiles, interval widths, model selection, or UQ hyperparameters.
+
+The UQ contribution should remain lightweight and publication-oriented: a calibrated reliability layer on top of the frozen point model, not a second large uncertainty architecture.
 
 ## 8. Second dataset policy
 
@@ -120,7 +140,7 @@ The following are retained as useful diagnostics or future extensions, but are n
 - coordinate-invariant optical encoder
 - complex support-complementarity gating
 - NestedCal99 as the principal method
-- multi-stage reliability + UQ framework
+- multi-stage sensor-level reliability propagation
 
 Existing runs are not deleted; they can support motivation or supplementary ablations.
 
@@ -139,8 +159,8 @@ If adaptive fusion fails this test, use the simpler heterogeneous direct-fusion 
 2. Q2-P2: source-only epoch selection + 3–5 seeds for surviving models.
 3. Q2-T1/T2/T3/T4 complete benchmark suite.
 4. Feature/representation/noise ablations.
-5. Figures and statistical tables.
-6. Optional split-conformal UQ only if it does not delay manuscript completion.
-7. Write manuscript around the evidence actually obtained.
+5. Freeze the point estimator.
+6. UQ-U1 split conformal; then UQ-U2 CQR only if justified by interval metrics.
+7. Figures, statistics, and manuscript writing around the evidence actually obtained.
 
 This scope is frozen unless a fatal data or methodological flaw is discovered.
