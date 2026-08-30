@@ -1,0 +1,11 @@
+# Downloaded public dataset and extracted payloads
+/data/raw/
+/data/extracted/
+
+# Generated analysis outputs (kept as GitHub Actions artifacts)
+/results/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
