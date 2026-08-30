@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -13,7 +14,8 @@ from urllib3.util.retry import Retry
 
 DATASET_ID = "ft6rtwt8vm"
 VERSION = 1
-BASE_API = "https://data.mendeley.com/public-api/datasets"
+PUBLIC_API = "https://data.mendeley.com/public-api/datasets"
+DATA_API = "https://api.data.mendeley.com/datasets"
 
 
 def build_session() -> requests.Session:
@@ -48,19 +50,145 @@ def normalize_file_list(payload: Any) -> list[dict[str, Any]]:
     raise TypeError(f"Unexpected Mendeley response shape: {type(payload).__name__}")
 
 
-def list_files(session: requests.Session, dataset_id: str, version: int) -> list[dict[str, Any]]:
-    """Enumerate public files using Mendeley's web-facing public API.
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
-    Mendeley's public proxy has periodically rejected requests carrying encoded
-    `$start` / `$limit` parameters from cloud runners. The public dataset used
-    here has far fewer than 100 root files, so the most compatible request is
-    the same compact form used by Mendeley's public download examples:
-    `?folder_id=root&version=1`.
+
+def safe_filename(name: str) -> str:
+    name = name.strip().replace("\\", "_").replace("/", "_")
+    name = re.sub(r"[^A-Za-z0-9._()\-\u4e00-\u9fff]+", "_", name)
+    return name or "unnamed_file"
+
+
+def stream_to_file(resp: requests.Response, target: Path) -> None:
+    with target.open("wb") as f:
+        for chunk in resp.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                f.write(chunk)
+
+
+def looks_like_zip(path: Path) -> bool:
+    try:
+        with path.open("rb") as f:
+            return f.read(4).startswith(b"PK")
+    except OSError:
+        return False
+
+
+def try_direct_dataset_zip(
+    session: requests.Session, dataset_id: str, version: int, out_dir: Path
+) -> dict[str, Any] | None:
+    """Try Mendeley's non-Cloudflare data API before the web public API.
+
+    GitHub-hosted runner IPs can be challenged by Cloudflare on data.mendeley.com.
+    The api.data.mendeley.com host is a separate API gateway. For public datasets,
+    the ZIP download endpoint may return either the ZIP directly/through a redirect
+    or JSON describing a ready archive URL.
     """
-    dataset_page = f"https://data.mendeley.com/datasets/{dataset_id}/{version}"
-    api_url = f"{BASE_API}/{dataset_id}/files"
+    candidates = [
+        f"{DATA_API}/{dataset_id}/zip/file_downloaded?version={version}",
+        f"{DATA_API}/{dataset_id}/zip?version={version}",
+    ]
+    errors: list[str] = []
 
-    # Bootstrap the same cookie/session path as a normal browser visit.
+    for url in candidates:
+        print(f"Trying Mendeley dataset ZIP endpoint: {url}")
+        try:
+            resp = session.get(
+                url,
+                headers={"Accept": "application/zip, application/json, */*"},
+                timeout=180,
+                allow_redirects=True,
+                stream=True,
+            )
+        except requests.RequestException as exc:
+            errors.append(f"{url}: {exc!r}")
+            continue
+
+        content_type = (resp.headers.get("content-type") or "").lower()
+        print(f"  -> HTTP {resp.status_code}; content-type={content_type}; final={resp.url}")
+        if not resp.ok:
+            body = resp.text[:300].replace("\n", " ")
+            errors.append(f"{url}: HTTP {resp.status_code}: {body}")
+            continue
+
+        # Direct archive response (or redirect to object storage).
+        if "zip" in content_type or "octet-stream" in content_type:
+            target = out_dir / "mendeley_dataset.zip"
+            stream_to_file(resp, target)
+            if looks_like_zip(target):
+                return {
+                    "mendeley_id": "dataset-zip",
+                    "filename": target.name,
+                    "original_filename": target.name,
+                    "bytes": target.stat().st_size,
+                    "sha256": sha256_file(target),
+                    "expected_sha256": None,
+                    "content_type": content_type,
+                    "source_download_url": resp.url,
+                }
+            target.unlink(missing_ok=True)
+            errors.append(f"{url}: binary response was not a ZIP archive")
+            continue
+
+        # JSON endpoint can return a signed URL and integrity metadata.
+        try:
+            payload = resp.json()
+        except Exception:
+            text = resp.text[:300].replace("\n", " ")
+            errors.append(f"{url}: HTTP 200 but unsupported payload: {text}")
+            continue
+
+        if isinstance(payload, dict):
+            signed_url = (
+                payload.get("url")
+                or payload.get("download_url")
+                or (payload.get("content_details") or {}).get("download_url")
+            )
+            status = str(payload.get("status") or "").upper()
+            print(f"  -> JSON archive status={status or 'UNKNOWN'}; signed_url={bool(signed_url)}")
+            if signed_url:
+                archive_resp = session.get(str(signed_url), stream=True, timeout=180, allow_redirects=True)
+                archive_resp.raise_for_status()
+                target = out_dir / "mendeley_dataset.zip"
+                stream_to_file(archive_resp, target)
+                if not looks_like_zip(target):
+                    target.unlink(missing_ok=True)
+                    errors.append(f"{url}: signed URL did not return ZIP bytes")
+                    continue
+                actual_sha = sha256_file(target)
+                expected_sha = payload.get("sha256_hash") or (payload.get("content_details") or {}).get("sha256_hash")
+                if expected_sha and str(expected_sha).lower() != actual_sha.lower():
+                    raise RuntimeError("SHA-256 mismatch for dataset ZIP")
+                return {
+                    "mendeley_id": "dataset-zip",
+                    "filename": target.name,
+                    "original_filename": target.name,
+                    "bytes": target.stat().st_size,
+                    "sha256": actual_sha,
+                    "expected_sha256": expected_sha,
+                    "content_type": archive_resp.headers.get("content-type"),
+                    "source_download_url": str(signed_url),
+                    "archive_status": status or None,
+                }
+
+        errors.append(f"{url}: no downloadable archive URL in JSON response")
+
+    print("Direct dataset ZIP endpoints were unavailable:")
+    for error in errors:
+        print(f"  - {error}")
+    return None
+
+
+def list_files(session: requests.Session, dataset_id: str, version: int) -> list[dict[str, Any]]:
+    """Fallback to Mendeley's web-facing public file API."""
+    dataset_page = f"https://data.mendeley.com/datasets/{dataset_id}/{version}"
+    api_url = f"{PUBLIC_API}/{dataset_id}/files"
+
     try:
         session.get(
             dataset_page,
@@ -68,7 +196,6 @@ def list_files(session: requests.Session, dataset_id: str, version: int) -> list
             timeout=60,
         ).raise_for_status()
     except requests.RequestException:
-        # The file API can still work even if the HTML bootstrap is blocked.
         pass
 
     strategies = [
@@ -100,27 +227,15 @@ def list_files(session: requests.Session, dataset_id: str, version: int) -> list
     raise RuntimeError("Unable to enumerate Mendeley dataset files. " + " | ".join(errors))
 
 
-def safe_filename(name: str) -> str:
-    name = name.strip().replace("\\", "_").replace("/", "_")
-    name = re.sub(r"[^A-Za-z0-9._()\-\u4e00-\u9fff]+", "_", name)
-    return name or "unnamed_file"
-
-
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def download_file(session: requests.Session, item: dict[str, Any], out_dir: Path) -> dict[str, Any]:
+def download_file(
+    session: requests.Session, item: dict[str, Any], out_dir: Path, dataset_id: str
+) -> dict[str, Any]:
     details = item.get("content_details") or {}
     url = details.get("download_url") or item.get("download_url")
     if not url:
         file_id = item.get("id") or details.get("id")
         if file_id:
-            url = f"https://data.mendeley.com/public-files/datasets/{DATASET_ID}/files/{file_id}/file_downloaded"
+            url = f"https://data.mendeley.com/public-files/datasets/{dataset_id}/files/{file_id}/file_downloaded"
         else:
             raise KeyError(f"No download_url for Mendeley file: {item}")
 
@@ -128,7 +243,6 @@ def download_file(session: requests.Session, item: dict[str, Any], out_dir: Path
     filename = safe_filename(str(original_name))
     target = out_dir / filename
 
-    # Disambiguate duplicate names without silently overwriting data.
     if target.exists():
         stem, suffix = target.stem, target.suffix
         idx = 2
@@ -138,10 +252,7 @@ def download_file(session: requests.Session, item: dict[str, Any], out_dir: Path
 
     with session.get(url, stream=True, timeout=180, allow_redirects=True) as resp:
         resp.raise_for_status()
-        with target.open("wb") as f:
-            for chunk in resp.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    f.write(chunk)
+        stream_to_file(resp, target)
 
     actual_sha = sha256_file(target)
     expected_sha = details.get("sha256_hash") or item.get("sha256_hash")
@@ -171,23 +282,30 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     session = build_session()
 
-    files = list_files(session, args.dataset_id, args.version)
-    records = []
-    for idx, item in enumerate(files, start=1):
-        print(f"[{idx}/{len(files)}] downloading {item.get('filename') or item.get('name') or item.get('id')}")
-        records.append(download_file(session, item, out_dir))
+    records: list[dict[str, Any]] = []
+    archive_record = try_direct_dataset_zip(session, args.dataset_id, args.version, out_dir)
+    if archive_record is not None:
+        records.append(archive_record)
+        acquisition_mode = "dataset_zip_api"
+    else:
+        files = list_files(session, args.dataset_id, args.version)
+        for idx, item in enumerate(files, start=1):
+            print(f"[{idx}/{len(files)}] downloading {item.get('filename') or item.get('name') or item.get('id')}")
+            records.append(download_file(session, item, out_dir, args.dataset_id))
+        acquisition_mode = "public_file_api"
 
     manifest = {
         "dataset_id": args.dataset_id,
         "version": args.version,
         "doi": f"10.17632/{args.dataset_id}.{args.version}",
         "dataset_page": f"https://data.mendeley.com/datasets/{args.dataset_id}/{args.version}",
+        "acquisition_mode": acquisition_mode,
         "file_count": len(records),
         "total_bytes": sum(r["bytes"] for r in records),
         "files": records,
     }
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(json.dumps({k: manifest[k] for k in ("doi", "file_count", "total_bytes")}, indent=2))
+    print(json.dumps({k: manifest[k] for k in ("doi", "acquisition_mode", "file_count", "total_bytes")}, indent=2))
 
 
 if __name__ == "__main__":
