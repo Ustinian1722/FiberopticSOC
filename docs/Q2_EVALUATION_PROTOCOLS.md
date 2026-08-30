@@ -11,8 +11,8 @@ This file defines the intended hierarchy of evaluation tasks for the Q2 manuscri
 - Normalization is fitted on the training partition only.
 - Sequence windows may not cross a split boundary.
 - Whenever different partitions touch the same source trajectory, remove a guard region of at least `window-1` rows on each relevant boundary so overlapping raw observations cannot appear in different partitions.
-- Model/hyperparameter/epoch selection uses training-side validation only.
-- Final test labels are used only for reporting metrics.
+- Model/hyperparameter/epoch selection uses training-side validation only unless a protocol is explicitly designated as a development screen below.
+- Final confirmatory test labels are used only for reporting metrics.
 
 ## T1 — Mixed-condition interpolation benchmark
 
@@ -77,6 +77,17 @@ For T2-T4, model-specific epoch budgets are selected from source profiles only. 
 - final target trajectory is never involved in epoch selection.
 
 Development seed42 may be used to select/freeze protocol choices. Publication statistics use independent final seeds (target 3-5 seeds, preferably 5 for T4).
+
+### Development-screen disclosure
+
+The representation-aware equal-budget screen is an explicitly designated **development screen**. It uses seed42 and the six held-out 2C target profiles in the 1C -> 2C direction to freeze the optical coordinate and architecture. Consequently:
+
+- the 1C -> 2C target trajectories used by that screen are no longer an untouched data holdout for representation/architecture selection;
+- later seeds 0-4 on the same frozen 1C -> 2C splits are valid independent-seed robustness statistics after design freeze, but must not be described as evaluation on target trajectories never used during development;
+- no target label from either direction may be used for source-only epoch selection, matched delta-t selection, calibration, or any later hyperparameter decision;
+- provided the reverse 2C -> 1C target results remain uninspected until all representation, architecture, epoch, delta-t and UQ decisions are frozen, that reverse direction retains the stronger role of a confirmatory cross-rate/unseen-profile evaluation.
+
+The manuscript and repository reports must preserve this distinction rather than conflating random-seed independence with data-level holdout independence.
 
 ## Feature ablation matrix
 
