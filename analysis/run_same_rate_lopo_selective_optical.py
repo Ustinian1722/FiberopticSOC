@@ -71,14 +71,14 @@ def current_ood_metadata(
     return pd.DataFrame(rows)
 
 
-def build_configs(train_sources: list[dict]):
+def build_config_factories(train_sources: list[dict]):
     train_all = np.concatenate([s["x"] for s in train_sources], axis=0)
     tf_white = whitening_matrix(train_all[:, (4, 5)])
     return (
-        ("VI", ParameterMatchedVITCN()),
-        ("VI+W", PairTCN((2, 3))),
-        ("VI+TF", PairTCN((4, 5))),
-        ("VI+TF-white", PairTCN((4, 5), tf_white)),
+        ("VI", lambda: ParameterMatchedVITCN()),
+        ("VI+W", lambda: PairTCN((2, 3))),
+        ("VI+TF", lambda: PairTCN((4, 5))),
+        ("VI+TF-white", lambda: PairTCN((4, 5), tf_white)),
     )
 
 
@@ -173,8 +173,9 @@ def main() -> None:
             y_ref: np.ndarray | None = None
             params_by_model: dict[str, int] = {}
 
-            for model_name, model in build_configs(train_sources):
+            for model_name, factory in build_config_factories(train_sources):
                 seed_everything(args.seed)
+                model = factory()
                 params = count_params(model)
                 params_by_model[model_name] = params
                 print(f"\n--- {model_name}, params={params} ---")
