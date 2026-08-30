@@ -1,0 +1,87 @@
+name: Causal FBG representation benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "analysis/run_sequence_representation_benchmark.py"
+      - ".github/workflows/sequence-representation-benchmark.yml"
+      - "SiC-18.zip"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fiberoptic-sequence-representation
+  cancel-in-progress: true
+
+jobs:
+  cross-rate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Stage and verify SiC-18 archive
+        shell: bash
+        run: |
+          test -f SiC-18.zip
+          mkdir -p data/raw data/extracted/SiC-18
+          cp SiC-18.zip data/raw/SiC-18.zip
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  data/raw/SiC-18.zip" | sha256sum -c -
+          unzip -q data/raw/SiC-18.zip -d data/extracted/SiC-18
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install analysis dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Run causal cross-rate sequence benchmark
+        run: |
+          python analysis/run_sequence_representation_benchmark.py \
+            --data data/extracted/SiC-18 \
+            --out-dir results/sequence_representation \
+            --window 64 \
+            --train-stride 4 \
+            --test-stride 1 \
+            --epochs 6 \
+            --batch-size 256 \
+            --seed 42
+
+      - name: Publish compact result summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f results/sequence_representation/cross_rate_results.csv ]; then
+            echo "## Causal FBG representation benchmark" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import pandas as pd
+          p = "results/sequence_representation/cross_rate_results.csv"
+          df = pd.read_csv(p)
+          cols = ["split","model","MAE","RMSE","R2","MaxAE","Q95_AE","params"]
+          print(df[cols].sort_values(["split","MAE"]).to_string(index=False))
+          PY
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload sequence results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: causal-fbg-representation-benchmark
+          path: results/sequence_representation/**
+          if-no-files-found: warn
+          retention-days: 30
