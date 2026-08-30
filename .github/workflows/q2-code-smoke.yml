@@ -1,0 +1,41 @@
+name: Q2 research module smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "analysis/run_q2_nested_epoch_selection.py"
+      - "analysis/run_q2_timegap_ablation.py"
+      - "analysis/run_split_conformal_uq.py"
+      - ".github/workflows/q2-code-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile Q2 modules
+        run: |
+          python -m py_compile \
+            analysis/run_q2_nested_epoch_selection.py \
+            analysis/run_q2_timegap_ablation.py \
+            analysis/run_split_conformal_uq.py \
+            analysis/run_q2_etmf_prototype.py
+      - name: Import Q2 modules
+        working-directory: analysis
+        run: |
+          python - <<'PY'
+          import run_q2_nested_epoch_selection
+          import run_q2_timegap_ablation
+          import run_split_conformal_uq
+          import run_q2_etmf_prototype
+          print('Q2 module import smoke passed')
+          PY
