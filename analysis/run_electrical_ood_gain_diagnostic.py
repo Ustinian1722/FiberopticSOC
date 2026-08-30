@@ -6,13 +6,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from run_representation_conditioning_diagnostic import PairTCN
 from run_sequence_representation_benchmark import (
+    TCNEncoder,
     WindowDataset,
     load_sources,
-    metric_dict,
     normalize_sources,
     predict_model,
     seed_everything,
@@ -21,9 +21,35 @@ from run_sequence_representation_benchmark import (
 )
 
 
-def fit_model(pair, train_loader, args, device):
+class MatchedInputTCN(nn.Module):
+    """Four-channel parameter-matched control.
+
+    VI uses [V, I, 0, 0]; VI+W uses [V, I, W1, W2]. This avoids both
+    duplicated electrical inputs and parameter-count confounding.
+    """
+
+    def __init__(self, mode: str, hidden: int = 24):
+        super().__init__()
+        if mode not in {"VI", "VI+W"}:
+            raise ValueError(mode)
+        self.mode = mode
+        self.encoder = TCNEncoder(4, hidden)
+        self.head = nn.Sequential(nn.Linear(hidden, hidden), nn.GELU(), nn.Linear(hidden, 1))
+
+    def forward(self, x: torch.Tensor):
+        electrical = x[:, :, (0, 1)]
+        if self.mode == "VI":
+            auxiliary = torch.zeros_like(electrical)
+        else:
+            auxiliary = x[:, :, (2, 3)]
+        z = torch.cat([electrical, auxiliary], dim=-1)
+        h = self.encoder(z)
+        return self.head(h).squeeze(-1), None
+
+
+def fit_model(mode, train_loader, args, device):
     seed_everything(args.seed)
-    model = PairTCN(pair)
+    model = MatchedInputTCN(mode)
     train_model(model, train_loader, device, args.epochs, args.lr)
     return model
 
@@ -147,9 +173,9 @@ def main() -> None:
 
         preds = {}
         y_ref = None
-        for name, pair in (("VI", (0, 1)), ("VI+W", (2, 3))):
+        for name in ("VI", "VI+W"):
             print(f"\n=== {split} / {name} ===")
-            model = fit_model(pair, train_loader, args, device)
+            model = fit_model(name, train_loader, args, device)
             y, pred, _, _ = predict_model(model, test_loader, device)
             preds[name] = pred
             if y_ref is None:
@@ -186,7 +212,6 @@ def main() -> None:
         by_soc_ood.insert(1, "aggregation", "soc_x_ood")
         all_summary.append(by_soc_ood)
 
-        # Label-free association: does electrical OOD score predict where optical input helps?
         pearson = float(meta[["ood_fraction", "gain_VI_minus_VIW"]].corr(method="pearson").iloc[0, 1])
         spearman = float(meta[["ood_fraction", "gain_VI_minus_VIW"]].corr(method="spearman").iloc[0, 1])
         print(f"{split}: corr(ood_fraction, optical_gain) Pearson={pearson:.4f}, Spearman={spearman:.4f}")
