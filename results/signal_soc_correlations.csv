@@ -1,0 +1,7 @@
+signal,pearson_with_SOC,spearman_with_SOC
+Voltage_V,0.969598,0.983974
+Current_A,-0.138399,-0.178496
+Wavelength_1,0.496076,0.401039
+Wavelength_2,0.957420,0.943133
+temperature_℃,-0.903447,-0.939049
+force_N,0.961953,0.986917
