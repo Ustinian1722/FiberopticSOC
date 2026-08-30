@@ -6,7 +6,6 @@ import json
 import re
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -16,6 +15,7 @@ DATASET_ID = "ft6rtwt8vm"
 VERSION = 1
 PUBLIC_API = "https://data.mendeley.com/public-api/datasets"
 DATA_API = "https://api.data.mendeley.com/datasets"
+JINA_READER = "https://r.jina.ai/"
 
 
 def build_session() -> requests.Session:
@@ -82,13 +82,6 @@ def looks_like_zip(path: Path) -> bool:
 def try_direct_dataset_zip(
     session: requests.Session, dataset_id: str, version: int, out_dir: Path
 ) -> dict[str, Any] | None:
-    """Try Mendeley's non-Cloudflare data API before the web public API.
-
-    GitHub-hosted runner IPs can be challenged by Cloudflare on data.mendeley.com.
-    The api.data.mendeley.com host is a separate API gateway. For public datasets,
-    the ZIP download endpoint may return either the ZIP directly/through a redirect
-    or JSON describing a ready archive URL.
-    """
     candidates = [
         f"{DATA_API}/{dataset_id}/zip/file_downloaded?version={version}",
         f"{DATA_API}/{dataset_id}/zip?version={version}",
@@ -116,7 +109,6 @@ def try_direct_dataset_zip(
             errors.append(f"{url}: HTTP {resp.status_code}: {body}")
             continue
 
-        # Direct archive response (or redirect to object storage).
         if "zip" in content_type or "octet-stream" in content_type:
             target = out_dir / "mendeley_dataset.zip"
             stream_to_file(resp, target)
@@ -135,7 +127,6 @@ def try_direct_dataset_zip(
             errors.append(f"{url}: binary response was not a ZIP archive")
             continue
 
-        # JSON endpoint can return a signed URL and integrity metadata.
         try:
             payload = resp.json()
         except Exception:
@@ -184,17 +175,52 @@ def try_direct_dataset_zip(
     return None
 
 
-def list_files(session: requests.Session, dataset_id: str, version: int) -> list[dict[str, Any]]:
-    """Fallback to Mendeley's web-facing public file API."""
+def extract_json_from_reader_text(text: str) -> Any:
+    """Extract a JSON object/array from a text-proxy response."""
+    stripped = text.strip()
+    candidates = [stripped]
+    fenced = re.findall(r"```(?:json)?\s*(.*?)```", stripped, flags=re.S | re.I)
+    candidates.extend(fenced)
+    for open_ch, close_ch in (("[", "]"), ("{", "}")):
+        start = stripped.find(open_ch)
+        end = stripped.rfind(close_ch)
+        if start >= 0 and end > start:
+            candidates.append(stripped[start : end + 1])
+    for candidate in candidates:
+        try:
+            return json.loads(candidate)
+        except Exception:
+            pass
+    raise ValueError("No parseable JSON payload found in reader response")
+
+
+def list_files_via_reader(session: requests.Session, dataset_id: str, version: int) -> list[dict[str, Any]]:
+    """Metadata-only fallback through a public text reader.
+
+    This is used only to recover the public file metadata/UUIDs when Mendeley's
+    Cloudflare challenge blocks GitHub-hosted runner IPs. Actual dataset bytes are
+    still downloaded from Mendeley's own public file URLs.
+    """
+    origin = f"https://data.mendeley.com/public-api/datasets/{dataset_id}/files?folder_id=root&version={version}"
+    proxy_url = JINA_READER + origin
+    print(f"Trying metadata-only reader fallback: {proxy_url}")
+    resp = session.get(proxy_url, headers={"Accept": "text/plain, */*"}, timeout=120)
+    print(f"  -> HTTP {resp.status_code}; content-type={resp.headers.get('content-type')}")
+    resp.raise_for_status()
+    payload = extract_json_from_reader_text(resp.text)
+    files = normalize_file_list(payload)
+    if not files:
+        raise RuntimeError("Reader fallback returned an empty Mendeley file list")
+    print(f"  -> recovered metadata for {len(files)} public file(s)")
+    return files
+
+
+def list_files(session: requests.Session, dataset_id: str, version: int) -> tuple[list[dict[str, Any]], str]:
     dataset_page = f"https://data.mendeley.com/datasets/{dataset_id}/{version}"
     api_url = f"{PUBLIC_API}/{dataset_id}/files"
 
     try:
-        session.get(
-            dataset_page,
-            headers={"Accept": "text/html,application/xhtml+xml"},
-            timeout=60,
-        ).raise_for_status()
+        session.get(dataset_page, headers={"Accept": "text/html,application/xhtml+xml"}, timeout=60).raise_for_status()
     except requests.RequestException:
         pass
 
@@ -218,28 +244,35 @@ def list_files(session: requests.Session, dataset_id: str, version: int) -> list
         if resp.ok:
             files = normalize_file_list(resp.json())
             if files:
-                return files
+                return files, "public_file_api"
             errors.append(f"{resp.url}: HTTP 200 but no files")
             continue
-        body = resp.text[:500].replace("\n", " ")
+        body = resp.text[:300].replace("\n", " ")
         errors.append(f"{resp.url}: HTTP {resp.status_code}: {body}")
 
-    raise RuntimeError("Unable to enumerate Mendeley dataset files. " + " | ".join(errors))
+    print("Mendeley web file API unavailable from this runner:")
+    for error in errors:
+        print(f"  - {error}")
+
+    files = list_files_via_reader(session, dataset_id, version)
+    return files, "reader_metadata_plus_mendeley_public_files"
 
 
 def download_file(
-    session: requests.Session, item: dict[str, Any], out_dir: Path, dataset_id: str
+    session: requests.Session, item: dict[str, Any], out_dir: Path, dataset_id: str, version: int
 ) -> dict[str, Any]:
     details = item.get("content_details") or {}
+    file_id = item.get("id") or details.get("id")
     url = details.get("download_url") or item.get("download_url")
-    if not url:
-        file_id = item.get("id") or details.get("id")
-        if file_id:
-            url = f"https://data.mendeley.com/public-files/datasets/{dataset_id}/files/{file_id}/file_downloaded"
-        else:
-            raise KeyError(f"No download_url for Mendeley file: {item}")
 
-    original_name = item.get("filename") or item.get("name") or details.get("filename") or item.get("id", "file")
+    # Prefer the stable Mendeley public-files route when a UUID is known. It avoids
+    # another metadata/API request and preserves attribution to the original host.
+    if file_id:
+        url = f"https://data.mendeley.com/public-files/datasets/{dataset_id}/files/{file_id}/file_downloaded?version={version}"
+    if not url:
+        raise KeyError(f"No download URL or file UUID for Mendeley file: {item}")
+
+    original_name = item.get("filename") or item.get("name") or details.get("filename") or file_id or "file"
     filename = safe_filename(str(original_name))
     target = out_dir / filename
 
@@ -250,7 +283,9 @@ def download_file(
             target = out_dir / f"{stem}_{idx}{suffix}"
             idx += 1
 
-    with session.get(url, stream=True, timeout=180, allow_redirects=True) as resp:
+    print(f"Downloading public file from Mendeley: {url}")
+    with session.get(url, stream=True, timeout=300, allow_redirects=True) as resp:
+        print(f"  -> HTTP {resp.status_code}; final={resp.url}; type={resp.headers.get('content-type')}")
         resp.raise_for_status()
         stream_to_file(resp, target)
 
@@ -260,7 +295,7 @@ def download_file(
         raise RuntimeError(f"SHA-256 mismatch for {filename}")
 
     return {
-        "mendeley_id": item.get("id"),
+        "mendeley_id": file_id,
         "filename": filename,
         "original_filename": original_name,
         "bytes": target.stat().st_size,
@@ -288,11 +323,10 @@ def main() -> None:
         records.append(archive_record)
         acquisition_mode = "dataset_zip_api"
     else:
-        files = list_files(session, args.dataset_id, args.version)
+        files, acquisition_mode = list_files(session, args.dataset_id, args.version)
         for idx, item in enumerate(files, start=1):
-            print(f"[{idx}/{len(files)}] downloading {item.get('filename') or item.get('name') or item.get('id')}")
-            records.append(download_file(session, item, out_dir, args.dataset_id))
-        acquisition_mode = "public_file_api"
+            print(f"[{idx}/{len(files)}] {item.get('filename') or item.get('name') or item.get('id')}")
+            records.append(download_file(session, item, out_dir, args.dataset_id, args.version))
 
     manifest = {
         "dataset_id": args.dataset_id,
