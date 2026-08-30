@@ -1,0 +1,46 @@
+name: Q2 T1 CQR development
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/q2-t1-cqr-development.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cqr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage data
+        run: |
+          mkdir -p data/extracted/SiC-18
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  SiC-18.zip" | sha256sum -c -
+          unzip -q SiC-18.zip -d data/extracted/SiC-18
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Run T1 CQR candidate
+        run: |
+          python analysis/run_q2_t1_cqr.py \
+            --data data/extracted/SiC-18 \
+            --out-dir results/q2_t1_cqr \
+            --seed 42 --window 64 --train-stride 2 --eval-stride 1 \
+            --max-epochs 50 --min-epochs 10 --patience 7 --min-delta 0.00005
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-t1-cqr-development
+          path: results/q2_t1_cqr/**
+          retention-days: 30
