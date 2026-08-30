@@ -29,8 +29,8 @@ jobs:
           test -f config/q2_raw_w_source_epoch_audit_seed42.csv
           test -f config/q2_final_model_epoch_extension_plan.json
           python - <<'PY' >> "$GITHUB_OUTPUT"
+          import csv
           import json
-          import pandas as pd
           from pathlib import Path
 
           allowed_rates = {"1C", "2C"}
@@ -42,12 +42,12 @@ jobs:
           if not entries:
               raise SystemExit("Extension plan must contain at least one ceiling-bound inner fold")
 
-          baseline = pd.read_csv("config/q2_raw_w_source_epoch_audit_seed42.csv")
-          baseline["hit_max_epoch"] = baseline["hit_max_epoch"].astype(str).str.lower().eq("true")
+          with open("config/q2_raw_w_source_epoch_audit_seed42.csv", newline="") as f:
+              baseline = list(csv.DictReader(f))
           eligible = {
-              (r.direction.split("_to_")[0], r.main_held_out_profile, r.inner_val_profile)
-              for r in baseline.itertuples(index=False)
-              if r.hit_max_epoch
+              (r["direction"].split("_to_")[0], r["main_held_out_profile"], r["inner_val_profile"])
+              for r in baseline
+              if r["hit_max_epoch"].strip().lower() == "true"
           }
 
           include = []
