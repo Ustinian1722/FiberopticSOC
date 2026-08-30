@@ -55,7 +55,7 @@ jobs:
             --out-dir results/calibration_noise \
             --window 64 \
             --train-stride 4 \
-            --test-stride 1 \
+            --test-stride 4 \
             --epochs 6 \
             --batch-size 256 \
             --noise-trials 5 \
@@ -67,7 +67,7 @@ jobs:
         shell: bash
         run: |
           if [ -f results/calibration_noise/wavelength_noise_trials.csv ]; then
-            echo "## Controlled FBG robustness sweep" >> "$GITHUB_STEP_SUMMARY"
+            echo "## Controlled FBG robustness sweep (test stride 4)" >> "$GITHUB_STEP_SUMMARY"
             echo '```text' >> "$GITHUB_STEP_SUMMARY"
             python -c 'import pandas as pd; n=pd.read_csv("results/calibration_noise/wavelength_noise_trials.csv"); print("NOISE MAE"); print(n.groupby(["split","model","sigma_pm"])["MAE"].agg(["mean","std"]).reset_index().to_string(index=False)); c=pd.read_csv("results/calibration_noise/calibration_error_trials.csv"); c=c[c.model=="VI+TF"]; print("\nCALIBRATION MAE"); print(c.groupby(["split","calibration_sigma_pct"])["MAE"].agg(["mean","std"]).reset_index().to_string(index=False))' >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
