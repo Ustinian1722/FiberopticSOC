@@ -1,0 +1,88 @@
+name: Electrical-optical support complementarity multi-seed
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'analysis/run_support_complementarity_gate.py'
+      - '.github/workflows/support-complementarity-multiseed.yml'
+
+jobs:
+  seed-run:
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [0, 1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage and verify SiC-18 archive
+        shell: bash
+        run: |
+          test -f SiC-18.zip
+          mkdir -p data/raw data/extracted/SiC-18
+          cp SiC-18.zip data/raw/SiC-18.zip
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  data/raw/SiC-18.zip" | sha256sum -c -
+          unzip -q data/raw/SiC-18.zip -d data/extracted/SiC-18
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scipy==1.17.1 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Run seed ${{ matrix.seed }}
+        run: |
+          python analysis/run_support_complementarity_gate.py \
+            --data data/extracted/SiC-18 \
+            --out-dir results/support_complementarity/seed_${{ matrix.seed }} \
+            --window 64 --train-stride 4 --test-stride 1 \
+            --epochs 6 --batch-size 256 \
+            --envelope-quantile 0.005 --calibration-quantile 0.99 \
+            --optical-radius-quantile 0.995 --seed ${{ matrix.seed }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: support-complementarity-seed-${{ matrix.seed }}
+          path: |
+            results/support_complementarity/seed_${{ matrix.seed }}/split_metrics.csv
+            results/support_complementarity/seed_${{ matrix.seed }}/gate_summary.csv
+            results/support_complementarity/seed_${{ matrix.seed }}/aggregate_summary.csv
+          retention-days: 30
+
+  aggregate:
+    needs: seed-run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: support-complementarity-seed-*
+          path: downloaded
+          merge-multiple: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2
+      - name: Aggregate five seeds
+        run: |
+          python analysis/aggregate_cross_rate_multiseed.py \
+            --input-root downloaded \
+            --out-dir results/support_complementarity_aggregate
+      - name: Publish summary
+        shell: bash
+        run: |
+          echo "## Support-complementarity five-seed summary" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          python -c 'import pandas as pd; a=pd.read_csv("results/support_complementarity_aggregate/across_seed_summary.csv"); print(a.sort_values(["direction","MAE_mean"]).to_string(index=False)); print(); w=pd.read_csv("results/support_complementarity_aggregate/winner_counts.csv"); print(w.sort_values(["direction","wins"],ascending=[True,False]).to_string(index=False))' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: support-complementarity-multiseed-summary
+          path: results/support_complementarity_aggregate/**
+          retention-days: 30
