@@ -1,0 +1,97 @@
+name: Final frozen-epoch multiseed benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'config/frozen_epoch_plan.csv'
+      - 'analysis/run_frozen_epoch_final_benchmark.py'
+      - 'analysis/aggregate_final_benchmark.py'
+      - '.github/workflows/final-frozen-epoch-benchmark.yml'
+
+jobs:
+  seed-run:
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [0, 1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage and verify SiC-18 archive
+        shell: bash
+        run: |
+          test -f SiC-18.zip
+          test -f config/frozen_epoch_plan.csv
+          mkdir -p data/raw data/extracted/SiC-18
+          cp SiC-18.zip data/raw/SiC-18.zip
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  data/raw/SiC-18.zip" | sha256sum -c -
+          unzip -q data/raw/SiC-18.zip -d data/extracted/SiC-18
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scipy==1.17.1 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Run final frozen-epoch benchmark
+        run: |
+          python analysis/run_frozen_epoch_final_benchmark.py \
+            --data data/extracted/SiC-18 \
+            --epoch-plan config/frozen_epoch_plan.csv \
+            --out-dir results/final_frozen_epoch/seed_${{ matrix.seed }} \
+            --window 64 --train-stride 4 --test-stride 1 \
+            --batch-size 256 --seed ${{ matrix.seed }} \
+            --envelope-quantile 0.005 --calibration-quantile 0.99
+      - uses: actions/upload-artifact@v4
+        with:
+          name: final-frozen-epoch-seed-${{ matrix.seed }}
+          path: results/final_frozen_epoch/seed_${{ matrix.seed }}/**
+          retention-days: 30
+
+  aggregate:
+    needs: seed-run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: final-frozen-epoch-seed-*
+          path: downloaded
+          merge-multiple: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 scipy==1.17.1
+      - name: Aggregate final statistics
+        run: |
+          python analysis/aggregate_final_benchmark.py \
+            --input-root downloaded \
+            --out-dir results/final_frozen_epoch_aggregate \
+            --bootstrap-reps 20000 --bootstrap-seed 20260831
+      - name: Publish final summary
+        shell: bash
+        run: |
+          echo "## Final frozen-epoch SOC benchmark" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import pandas as pd
+          root='results/final_frozen_epoch_aggregate'
+          print(pd.read_csv(f'{root}/across_seed_summary.csv').sort_values(['direction','MAE_mean']).to_string(index=False))
+          print('\nPaired NestedCal99 vs VI:')
+          print(pd.read_csv(f'{root}/paired_statistics.csv').to_string(index=False))
+          print('\nWinner counts:')
+          print(pd.read_csv(f'{root}/winner_counts.csv').sort_values(['direction','wins'],ascending=[True,False]).to_string(index=False))
+          PY
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: final-frozen-epoch-summary
+          path: results/final_frozen_epoch_aggregate/**
+          retention-days: 30
