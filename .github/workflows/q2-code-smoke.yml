@@ -5,9 +5,12 @@ on:
   push:
     branches: [main]
     paths:
+      - "analysis/q2_protocols.py"
       - "analysis/run_q2_nested_epoch_selection.py"
       - "analysis/run_q2_timegap_ablation.py"
       - "analysis/run_split_conformal_uq.py"
+      - "analysis/run_q2_frozen_t4.py"
+      - "analysis/aggregate_q2_t4_multiseed.py"
       - ".github/workflows/q2-code-smoke.yml"
 
 permissions:
@@ -24,22 +27,28 @@ jobs:
           python-version: "3.11"
       - name: Install import dependencies
         run: |
-          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 scipy==1.17.1 scikit-learn==1.8.0
           python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
       - name: Compile Q2 modules
         run: |
           python -m py_compile \
+            analysis/q2_protocols.py \
             analysis/run_q2_nested_epoch_selection.py \
             analysis/run_q2_timegap_ablation.py \
             analysis/run_split_conformal_uq.py \
-            analysis/run_q2_etmf_prototype.py
+            analysis/run_q2_etmf_prototype.py \
+            analysis/run_q2_frozen_t4.py \
+            analysis/aggregate_q2_t4_multiseed.py
       - name: Import Q2 modules
         working-directory: analysis
         run: |
           python - <<'PY'
+          import q2_protocols
           import run_q2_nested_epoch_selection
           import run_q2_timegap_ablation
           import run_split_conformal_uq
           import run_q2_etmf_prototype
+          import run_q2_frozen_t4
+          import aggregate_q2_t4_multiseed
           print('Q2 module import smoke passed')
           PY
