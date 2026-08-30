@@ -1,0 +1,71 @@
+name: Battery data-science audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "analysis/run_battery_data_science_audit.py"
+      - ".github/workflows/battery-data-science-audit.yml"
+      - "SiC-18.zip"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fiberoptic-battery-data-science-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Stage and verify SiC-18 archive
+        shell: bash
+        run: |
+          test -f SiC-18.zip
+          mkdir -p data/raw data/extracted/SiC-18
+          cp SiC-18.zip data/raw/SiC-18.zip
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  data/raw/SiC-18.zip" | sha256sum -c -
+          unzip -q data/raw/SiC-18.zip -d data/extracted/SiC-18
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scikit-learn==1.8.0
+
+      - name: Run battery data-science audit
+        run: |
+          python analysis/run_battery_data_science_audit.py \
+            --data data/extracted/SiC-18 \
+            --out results/data_science_audit
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f results/data_science_audit/summary.json ]; then
+            echo "## SiC-18 battery data-science audit" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat results/data_science_audit/summary.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: battery-data-science-audit
+          path: results/data_science_audit/**
+          if-no-files-found: warn
+          retention-days: 30
