@@ -1,0 +1,83 @@
+name: FBG calibration and noise robustness
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "analysis/run_calibration_noise_robustness.py"
+      - ".github/workflows/calibration-noise-robustness.yml"
+      - "SiC-18.zip"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fiberoptic-calibration-noise
+  cancel-in-progress: true
+
+jobs:
+  robustness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Stage and verify SiC-18 archive
+        shell: bash
+        run: |
+          test -f SiC-18.zip
+          mkdir -p data/raw data/extracted/SiC-18
+          cp SiC-18.zip data/raw/SiC-18.zip
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  data/raw/SiC-18.zip" | sha256sum -c -
+          unzip -q data/raw/SiC-18.zip -d data/extracted/SiC-18
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Run controlled robustness sweeps
+        run: |
+          python analysis/run_calibration_noise_robustness.py \
+            --data data/extracted/SiC-18 \
+            --out-dir results/calibration_noise \
+            --window 64 \
+            --train-stride 4 \
+            --test-stride 1 \
+            --epochs 6 \
+            --batch-size 256 \
+            --noise-trials 5 \
+            --calibration-trials 10 \
+            --seed 42
+
+      - name: Publish robustness summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f results/calibration_noise/wavelength_noise_trials.csv ]; then
+            echo "## Controlled FBG robustness sweep" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            python -c 'import pandas as pd; n=pd.read_csv("results/calibration_noise/wavelength_noise_trials.csv"); print("NOISE MAE"); print(n.groupby(["split","model","sigma_pm"])["MAE"].agg(["mean","std"]).reset_index().to_string(index=False)); c=pd.read_csv("results/calibration_noise/calibration_error_trials.csv"); c=c[c.model=="VI+TF"]; print("\nCALIBRATION MAE"); print(c.groupby(["split","calibration_sigma_pct"])["MAE"].agg(["mean","std"]).reset_index().to_string(index=False))' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload robustness results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fbg-calibration-noise-robustness
+          path: results/calibration_noise/**
+          if-no-files-found: warn
+          retention-days: 30
