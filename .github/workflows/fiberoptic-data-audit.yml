@@ -31,11 +31,34 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install dependencies
+      - name: Install analysis dependencies
         run: python -m pip install --disable-pip-version-check -r requirements.txt
 
-      - name: Download public Mendeley dataset
+      - name: Try direct/public Mendeley download
+        id: http_download
+        continue-on-error: true
         run: python scripts/download_mendeley.py --dataset-id ft6rtwt8vm --version 1
+
+      - name: Install Chromium fallback
+        if: steps.http_download.outcome == 'failure'
+        run: |
+          python -m pip install --disable-pip-version-check playwright==1.55.0
+          python -m playwright install --with-deps chromium
+
+      - name: Download through public dataset page in Chromium
+        if: steps.http_download.outcome == 'failure'
+        run: python scripts/download_mendeley_browser.py --dataset-id ft6rtwt8vm --version 1
+
+      - name: Verify dataset acquisition
+        shell: bash
+        run: |
+          test -f data/raw/manifest.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path('data/raw/manifest.json').read_text())
+          print(json.dumps({k: manifest.get(k) for k in ['doi','acquisition_mode','file_count','total_bytes']}, indent=2))
+          PY
 
       - name: Run initial FBG/SOC data audit
         run: python scripts/analyze_dataset.py
@@ -58,5 +81,6 @@ jobs:
           path: |
             results/**
             data/raw/manifest.json
+            data/raw/*.png
           if-no-files-found: warn
           retention-days: 30
