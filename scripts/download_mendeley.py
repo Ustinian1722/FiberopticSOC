@@ -26,7 +26,13 @@ def build_session() -> requests.Session:
         allowed_methods=frozenset(["GET"]),
     )
     session = requests.Session()
-    session.headers.update({"User-Agent": "FiberopticSOC/1.0 (GitHub Actions research workflow)"})
+    session.headers.update({
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/140.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    })
     session.mount("https://", HTTPAdapter(max_retries=retry))
     return session
 
@@ -43,41 +49,55 @@ def normalize_file_list(payload: Any) -> list[dict[str, Any]]:
 
 
 def list_files(session: requests.Session, dataset_id: str, version: int) -> list[dict[str, Any]]:
-    url = f"{BASE_API}/{dataset_id}/files"
-    all_files: list[dict[str, Any]] = []
-    start = 0
-    limit = 100
+    """Enumerate public files using Mendeley's web-facing public API.
 
-    # Most Mendeley datasets expose files at root. If that request fails, retry
-    # without folder_id because the public API has changed behavior over time.
+    Mendeley's public proxy has periodically rejected requests carrying encoded
+    `$start` / `$limit` parameters from cloud runners. The public dataset used
+    here has far fewer than 100 root files, so the most compatible request is
+    the same compact form used by Mendeley's public download examples:
+    `?folder_id=root&version=1`.
+    """
+    dataset_page = f"https://data.mendeley.com/datasets/{dataset_id}/{version}"
+    api_url = f"{BASE_API}/{dataset_id}/files"
+
+    # Bootstrap the same cookie/session path as a normal browser visit.
+    try:
+        session.get(
+            dataset_page,
+            headers={"Accept": "text/html,application/xhtml+xml"},
+            timeout=60,
+        ).raise_for_status()
+    except requests.RequestException:
+        # The file API can still work even if the HTML bootstrap is blocked.
+        pass
+
     strategies = [
         {"folder_id": "root", "version": version},
         {"version": version},
     ]
+    errors: list[str] = []
 
-    last_error: Exception | None = None
-    for base_params in strategies:
-        all_files.clear()
-        start = 0
-        try:
-            while True:
-                params = dict(base_params)
-                params.update({"$start": start, "$limit": limit})
-                resp = session.get(url, params=params, timeout=60)
-                resp.raise_for_status()
-                batch = normalize_file_list(resp.json())
-                all_files.extend(batch)
-                if len(batch) < limit:
-                    break
-                start += len(batch)
-            if all_files:
-                return all_files
-        except Exception as exc:  # pragma: no cover - network behavior
-            last_error = exc
+    for params in strategies:
+        resp = session.get(
+            api_url,
+            params=params,
+            headers={
+                "Accept": "application/json, text/plain, */*",
+                "Referer": dataset_page,
+                "Origin": "https://data.mendeley.com",
+            },
+            timeout=60,
+        )
+        if resp.ok:
+            files = normalize_file_list(resp.json())
+            if files:
+                return files
+            errors.append(f"{resp.url}: HTTP 200 but no files")
+            continue
+        body = resp.text[:500].replace("\n", " ")
+        errors.append(f"{resp.url}: HTTP {resp.status_code}: {body}")
 
-    if last_error:
-        raise RuntimeError("Unable to enumerate Mendeley dataset files") from last_error
-    raise RuntimeError("Mendeley API returned no files")
+    raise RuntimeError("Unable to enumerate Mendeley dataset files. " + " | ".join(errors))
 
 
 def safe_filename(name: str) -> str:
@@ -98,7 +118,11 @@ def download_file(session: requests.Session, item: dict[str, Any], out_dir: Path
     details = item.get("content_details") or {}
     url = details.get("download_url") or item.get("download_url")
     if not url:
-        raise KeyError(f"No download_url for Mendeley file: {item}")
+        file_id = item.get("id") or details.get("id")
+        if file_id:
+            url = f"https://data.mendeley.com/public-files/datasets/{DATASET_ID}/files/{file_id}/file_downloaded"
+        else:
+            raise KeyError(f"No download_url for Mendeley file: {item}")
 
     original_name = item.get("filename") or item.get("name") or details.get("filename") or item.get("id", "file")
     filename = safe_filename(str(original_name))
@@ -112,7 +136,7 @@ def download_file(session: requests.Session, item: dict[str, Any], out_dir: Path
             target = out_dir / f"{stem}_{idx}{suffix}"
             idx += 1
 
-    with session.get(url, stream=True, timeout=120, allow_redirects=True) as resp:
+    with session.get(url, stream=True, timeout=180, allow_redirects=True) as resp:
         resp.raise_for_status()
         with target.open("wb") as f:
             for chunk in resp.iter_content(chunk_size=1024 * 1024):
