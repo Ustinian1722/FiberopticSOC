@@ -1,0 +1,157 @@
+name: Q2 final-model source-only epoch extension
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "config/q2_final_model_epoch_extension_plan.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fiberoptic-q2-final-model-epoch-extension
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        name: Validate frozen extension plan
+        shell: bash
+        run: |
+          test -f config/q2_final_model_epoch_extension_plan.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+
+          allowed_models = {
+              "IUW-TCN", "IUTF-TCN", "IUWwhite-TCN", "IUTFwhite-TCN",
+              "ETMF-W", "ETMF-TF", "ETMF-Wwhite", "ETMF-TFwhite",
+          }
+          allowed_rates = {"1C", "2C"}
+          allowed_profiles = {"HWFET", "LA92", "NEDC", "NYCC", "US06", "WLTC"}
+
+          plan = json.loads(Path("config/q2_final_model_epoch_extension_plan.json").read_text())
+          model = plan.get("model")
+          entries = plan.get("entries", [])
+          if model not in allowed_models:
+              raise SystemExit(f"Invalid final model: {model!r}")
+          if not entries:
+              raise SystemExit("Extension plan must contain at least one entry")
+
+          include = []
+          seen = set()
+          for raw in entries:
+              rate = raw.get("train_rate")
+              profile = raw.get("held_out_profile")
+              max_epochs = int(raw.get("max_epochs", 100))
+              key = (rate, profile)
+              if rate not in allowed_rates:
+                  raise SystemExit(f"Invalid train_rate: {rate!r}")
+              if profile not in allowed_profiles:
+                  raise SystemExit(f"Invalid held_out_profile: {profile!r}")
+              if key in seen:
+                  raise SystemExit(f"Duplicate extension entry: {key}")
+              if max_epochs < 20 or max_epochs > 200:
+                  raise SystemExit(f"max_epochs outside registered range [20,200]: {max_epochs}")
+              seen.add(key)
+              include.append({
+                  "model": model,
+                  "train_rate": rate,
+                  "held_out_profile": profile,
+                  "max_epochs": max_epochs,
+              })
+
+          print("matrix=" + json.dumps({"include": include}, separators=(",", ":")))
+          PY
+
+  extend:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify and extract SiC-18
+        run: |
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  SiC-18.zip" | sha256sum -c -
+          mkdir -p data/extracted/SiC-18
+          unzip -q SiC-18.zip -d data/extracted/SiC-18
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scipy==1.17.1 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Run source-only extension
+        run: |
+          python analysis/run_q2_final_model_epoch_extension.py \
+            --data data/extracted/SiC-18 \
+            --out-dir results/q2_final_model_epoch_extension/${{ matrix.train_rate }}_${{ matrix.held_out_profile }} \
+            --model "${{ matrix.model }}" \
+            --train-rate "${{ matrix.train_rate }}" \
+            --held-out-profile "${{ matrix.held_out_profile }}" \
+            --max-epochs ${{ matrix.max_epochs }} \
+            --window 64 --train-stride 4 --val-stride 1 --batch-size 256 \
+            --min-epochs 12 --patience 10 --min-delta 0.00005 --lr 0.001 --seed 42
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-final-epoch-${{ matrix.train_rate }}-${{ matrix.held_out_profile }}
+          path: results/q2_final_model_epoch_extension/${{ matrix.train_rate }}_${{ matrix.held_out_profile }}/**
+          retention-days: 45
+
+  aggregate:
+    needs: extend
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: q2-final-epoch-*
+          path: collected
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --disable-pip-version-check pandas==2.3.2
+      - name: Aggregate selected epochs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+
+          files = sorted(Path("collected").rglob("selected_epoch.csv"))
+          if not files:
+              raise SystemExit("No selected_epoch.csv artifacts found")
+          out = pd.concat([pd.read_csv(p) for p in files], ignore_index=True)
+          out = out.sort_values(["train_rate", "held_out_profile", "model"])
+          Path("summary").mkdir(exist_ok=True)
+          out.to_csv("summary/source_only_epoch_extension.csv", index=False)
+          print(out.to_string(index=False))
+          PY
+      - name: Publish summary
+        shell: bash
+        run: |
+          echo "## Q2 source-only final-model epoch extension" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          cat summary/source_only_epoch_extension.csv >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-final-model-epoch-extension-summary
+          path: summary/**
+          retention-days: 60
