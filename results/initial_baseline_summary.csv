@@ -1,0 +1,13 @@
+protocol,train,test,features,MAE,RMSE,R2,MaxAE
+LOPO_mean,all_same_rate,held_out_profile,VI+TF,0.007691,0.010874,0.998758,0.052455
+LOPO_mean,all_same_rate,held_out_profile,VI,0.009320,0.013430,0.998034,0.063687
+LOPO_mean,all_same_rate,held_out_profile,VI+W,0.009987,0.013808,0.997536,0.056464
+LOPO_mean,all_same_rate,held_out_profile,TF,0.020697,0.027748,0.991866,0.124772
+LOPO_mean,all_same_rate,held_out_profile,W,0.025389,0.033330,0.986991,0.129876
+LOPO_mean,all_same_rate,held_out_profile,V,0.045140,0.058556,0.962934,0.168287
+cross_rate,1C,2C,VI+W,0.015366,0.029305,0.991858,0.197701
+cross_rate,1C,2C,VI+TF,0.018753,0.032762,0.989823,0.149499
+cross_rate,1C,2C,VI,0.025603,0.045765,0.980143,0.200645
+cross_rate,2C,1C,VI+TF,0.008024,0.011031,0.998710,0.076290
+cross_rate,2C,1C,VI,0.011066,0.014782,0.997683,0.063940
+cross_rate,2C,1C,VI+W,0.011281,0.016286,0.997187,0.076632
