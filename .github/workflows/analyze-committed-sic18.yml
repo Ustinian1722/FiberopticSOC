@@ -5,7 +5,12 @@ on:
   push:
     branches: [main]
     paths:
+      - "SiC-18.zip"
       - "data/raw/SiC-18.zip"
+      - ".github/workflows/analyze-committed-sic18.yml"
+      - "scripts/**"
+      - "analysis/**"
+      - "requirements.txt"
 
 permissions:
   contents: read
@@ -19,10 +24,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify raw archive exists and matches audited hash
+      - name: Stage and verify audited raw archive
         shell: bash
         run: |
-          test -f data/raw/SiC-18.zip
+          mkdir -p data/raw
+          if [ -f data/raw/SiC-18.zip ]; then
+            SRC="data/raw/SiC-18.zip"
+          elif [ -f SiC-18.zip ]; then
+            SRC="SiC-18.zip"
+            cp SiC-18.zip data/raw/SiC-18.zip
+          else
+            echo "SiC-18.zip not found in repository root or data/raw" >&2
+            exit 1
+          fi
+          echo "Using archive: $SRC"
           echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  data/raw/SiC-18.zip" | sha256sum -c -
 
       - name: Set up Python
