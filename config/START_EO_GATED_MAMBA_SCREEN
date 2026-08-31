@@ -1,0 +1,20 @@
+release: true
+track: proposed_model_development
+branch: research/eo-gated-mamba-paper
+protocol: development_1C_to_2C_unseen_profile
+representation_main: raw_W
+representation_control: physics_decoupled_TF
+models:
+  - IUW-TCN
+  - VI-Mamba
+  - VIW-Mamba
+  - DualMS-Mamba
+  - EO-Gated-TCN
+  - EO-Gated-Mamba
+  - EO-Gated-Mamba-TF
+seed: 42
+epochs: 15
+window: 64
+train_stride: 4
+test_stride: 1
+formal_reverse_direction_locked: true
