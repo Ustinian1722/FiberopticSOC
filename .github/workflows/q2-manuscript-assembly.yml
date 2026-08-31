@@ -15,13 +15,15 @@ on:
       - ".github/workflows/q2-manuscript-assembly.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   assemble:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: research/eo-gated-mamba-paper
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -32,13 +34,27 @@ jobs:
           test -s paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
           test -s paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2_ASSEMBLY_REPORT.md
           grep -F '# 6. Conclusion' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
+          grep -F '# Data availability' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
+          grep -F '# Code availability' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
           grep -F '# References' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
           grep -F '48.52%' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
           grep -F '95.04%' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
           grep -F 'one physical cell instrumented with a fixed dual-FBG' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
           grep -F 'no formal 95% coverage guarantee' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
           grep -F 'reviewer-risk safeguards: **PASS**' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2_ASSEMBLY_REPORT.md
+          grep -F 'data/code availability sections: **PASS**' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2_ASSEMBLY_REPORT.md
           grep -F 'final abstract length: **250 words**' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2_ASSEMBLY_REPORT.md
+      - name: Persist canonical assembled manuscript
+        run: |
+          git config user.name "RuiSearch"
+          git config user.email "90998393+Ustinian1722@users.noreply.github.com"
+          git add paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2_ASSEMBLY_REPORT.md
+          if git diff --cached --quiet; then
+            echo "Canonical manuscript already up to date"
+          else
+            git commit -m "paper: persist canonical English manuscript V2 [skip ci]"
+            git push origin HEAD:research/eo-gated-mamba-paper
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: q2-english-manuscript-v2
