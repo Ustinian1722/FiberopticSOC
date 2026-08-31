@@ -1,0 +1,9 @@
+# Conclusion（中文初稿，投稿收敛版）
+
+本文围绕动态运行条件变化下的 FBG-assisted battery SOC estimation，构建了一种 representation-aware electrical–optical estimation framework。不同于将双 FBG wavelength 强制转换为多个独立物理特征的常见处理方式，本文首先分析 W1/W2 与 temperature/force 表示之间的 sensing relation，并通过 matched comparison 评价不同 optical coordinates 对 cross-condition prediction 的影响。在本文 SiC-18 数据和严格跨工况任务中，直接 wavelength representation 表现出更稳定的 transferability，因此最终 RA-FBG-TCN 采用 Voltage、Current、W1 和 W2 构造 64-sample causal input，并利用仅约 11.5k 参数的轻量 TCN 完成在线 SOC point estimation。
+
+实验结果表明，在常规 blocked interpolation 条件下，RA-FBG-TCN 获得 0.482% MAE、0.593% RMSE 和 0.999614 R²，保持了较高的基础 SOC estimation accuracy。进一步的 electrical-OOD analysis 表明，双 FBG 的价值具有明显的 operating-condition dependence：当电流位于训练支持范围内时，纯 V/I 已能够提供充分的 SOC information；随着 test current 逐渐偏离 training support，raw optical information 的相对贡献持续增加，在最严重 OOD 区间内相对于 parameter-matched electrical-only model 的 MAE 改善达到约 48.5%。这一结果说明，FBG 更适合作为 electrical sensing 在分布偏移条件下的 complementary internal observation，而非在所有工作区域内无条件提高点预测精度。
+
+在进一步的 cross-rate + unseen-profile evaluation 中，模型分别获得 1.795%（1C→2C）和 0.806%（2C→1C）的平均 MAE，两个方向综合后的 seed-cluster MAE 为 1.301%，bootstrap 95% confidence interval 为 0.961%–1.677%。直接对 W1/W2 施加最高 2 pm Gaussian wavelength noise 后，模型误差仅出现小幅增长，表明 native optical representation 具有一定的 measurement robustness。此外，通过独立 calibration set 构建的 95% residual conformal prediction interval 获得 95.04% empirical coverage 和 2.075% SOC 的平均区间宽度，实现了 point estimate 与 calibrated uncertainty interval 的统一输出。
+
+总体而言，本文结果表明，电池内部 optical sensing 的实际意义不仅在于增加输入变量数量，更在于当传统 electrical observations 超出训练支持域时提供不同物理来源的状态约束。同时，具有明确物理语义的解耦坐标并不必然是跨工况 data-driven prediction 的最优表示。后续工作将进一步面向多电芯、不同 FBG bonding/calibration condition、宽温度范围和长期 sensor ageing，研究可校准的跨电芯 optical transfer 与在线自适应机制，以推动 fiber-optic-assisted SOC estimation 在实际 BMS 中的应用。
