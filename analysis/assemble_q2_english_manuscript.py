@@ -73,6 +73,7 @@ banned = [
     "condition number of 107",
     "condition number of 119",
     "native W1/W2 universally outperform",
+    "statistically comparable",
 ]
 found = [x for x in banned if x.lower() in manuscript.lower()]
 if found:
@@ -104,7 +105,7 @@ for phrase in [
     "0.635% SOC [5]",
     "10.17632/ft6rtwt8vm.1",
     "ranks third rather than first",
-    "statistically comparable",
+    "closely comparable",
     "source-only nested profile-validation procedure",
     "range from 29 to 65 epochs",
     "Target-domain early stopping",
