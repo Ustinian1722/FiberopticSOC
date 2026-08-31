@@ -1,0 +1,12 @@
+release=true
+purpose=source_only_confirmation
+rate=1C
+protocol=same_rate_leave_one_profile_out
+seed=42
+epochs=20
+window=64
+train_stride=4
+validation_stride=1
+models=IUW-TCN,EO-CrossFormer-TF
+two_c_target_metrics_allowed=false
+no_new_architecture_search=true
