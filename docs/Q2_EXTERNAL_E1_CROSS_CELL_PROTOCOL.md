@@ -29,11 +29,21 @@ For each physical cell independently:
 
 The reconstruction must pass a structure audit before training: three consistent initial reference discharges per cell, expected 0.2/0.5/1C validation current levels, lower-voltage termination near 3.0 V, and high S5 availability.
 
-## Sensor rule
+## Sensor and optical-coordinate rule
 
-Use exactly one optical channel per cell: the central fixed sensor **S5**.
+Use exactly one optical sensor position per cell: the central fixed sensor **S5**.
 
 This rule was declared before external modeling because the publication reports spatially nonuniform pouch-surface strain and uses the central S5 position as the principal fixed-sensor example. No post-hoc sensor-position search is allowed.
+
+For cross-cell modeling, the primary optical predictor is the **causal raw Bragg shift relative to the start of the current full-charge discharge segment**:
+
+`S5_rel(t) = lambda_S5(t) - lambda_S5(t_segment_start)`.
+
+Rationale: different physical FBGs carry manufacturing/installation-dependent absolute Bragg offsets. Cross-cell use of absolute `lambda_S5` would therefore mix sensor identity/zero-point with battery state. The relative coordinate removes only that sensor-specific additive baseline while preserving the measured, non-decoupled Bragg response. It uses the first observation of the current discharge only and no future sample or SOC label.
+
+This is **not** a thermal/strain T/F decoupling. It remains a direct raw optical response coordinate.
+
+Absolute S5 wavelength may be reported later only as a calibration-sensitive ablation; it is not the primary E1 optical coordinate and cannot replace `S5_rel` based on held-out-cell accuracy.
 
 ## E1 outer split
 
@@ -53,7 +63,7 @@ Normalization statistics are fit on the three source cells only.
 No architecture search is conducted on the external test cells.
 
 1. `VI-TCN`: causal TCN template with inputs Voltage and Current.
-2. `VI-S5-TCN`: same causal TCN template with Voltage, Current and raw S5 Bragg wavelength.
+2. `VI-S5rel-TCN`: the same causal TCN template with Voltage, Current and `S5_rel`.
 
 Both use:
 
@@ -77,10 +87,11 @@ Report for each model:
 - per C-rate within each held-out cell;
 - number of physical discharge segments and windows;
 - aged versus pristine cells descriptively;
-- raw S5 wavelength range and source-only normalization provenance.
+- absolute S5 baseline/range and `S5_rel` range descriptively;
+- source-only normalization provenance.
 
 Primary external evidence question:
 
-> Does adding one pre-declared raw surface-FBG channel improve SOC estimation on an unseen physical pouch cell under the same external-data training protocol?
+> Does adding one pre-declared, zero-point-aligned raw surface-FBG response improve SOC estimation on an unseen physical pouch cell under the same external-data training protocol?
 
 The external experiment tests the **sensing/representation principle and architecture template**, not zero-shot transfer of SiC model weights. External target results cannot reopen SiC model selection.
