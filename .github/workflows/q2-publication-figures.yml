@@ -7,6 +7,7 @@ on:
       - research/eo-gated-mamba-paper
     paths:
       - "analysis/make_q2_publication_figures.py"
+      - "analysis/fix_q2_publication_figures.py"
       - "analysis/run_q2_final_t1_paper.py"
       - "paper/source_data/**"
       - "paper/figures/**"
@@ -60,6 +61,7 @@ jobs:
       - name: Nature-figure static preflight
         run: |
           mkdir -p paper/figures/generated/qa
+          python -m py_compile analysis/make_q2_publication_figures.py analysis/fix_q2_publication_figures.py
           python .nature-skills/skills/nature-figure/scripts/validate_figure.py \
             analysis/make_q2_publication_figures.py --backend python --json \
             > paper/figures/generated/qa/static_preflight.json || true
@@ -89,6 +91,15 @@ jobs:
             --generated-source-data paper/figures/generated/source_data \
             --qa-json paper/figures/generated/figure_manifest.json
 
+      - name: Apply V2 publication layout fixes
+        run: |
+          PYTHONPATH=analysis python analysis/fix_q2_publication_figures.py \
+            --data-root data/extracted/SiC-18 \
+            --source-data paper/source_data \
+            --predictions results/figure_t1/RA-FBG-TCN/uq/test_intervals.csv \
+            --out-dir paper/figures/generated
+          echo "v2_layout_fixes_applied=true" > paper/figures/generated/V2_LAYOUT_STATUS.txt
+
       - name: Audit exported PDF text sizes
         run: |
           set +e
@@ -117,7 +128,7 @@ jobs:
           done
           exit 0
 
-      - name: Verify figure contract
+      - name: Verify V2 figure contract
         run: |
           test -s paper/figures/generated/fig1_dataset_signals.svg
           test -s paper/figures/generated/fig2_representation_analysis.svg
@@ -127,14 +138,17 @@ jobs:
           test -s paper/figures/generated/fig7_noise_and_uncertainty.svg
           test -s paper/figures/generated/source_data/fig4_t1_predictions_uq.csv
           test -s paper/figures/generated/figure_manifest.json
+          test -s paper/figures/generated/V2_LAYOUT_STATUS.txt
+          test "$(cat paper/figures/generated/qa/text_audit_has_failure.txt)" = "0"
 
       - name: Upload publication figure package
         uses: actions/upload-artifact@v4
         with:
-          name: q2-publication-figures-v1
+          name: q2-publication-figures-v2
           path: |
             paper/figures/generated/**
             paper/source_data/**
             paper/figures/FIG3_PLACEHOLDER.md
             docs/Q2_FIGURE_STATUS.md
+            docs/Q2_MAIN_FIGURE_CAPTIONS_CN.md
           retention-days: 90
