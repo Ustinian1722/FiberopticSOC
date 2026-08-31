@@ -1,0 +1,11 @@
+release=true
+screen=final_architecture_family
+protocol=development_1C_to_2C_unseen_profile
+seed=42
+epochs=20
+window=64
+train_stride=4
+test_stride=1
+candidates=IUW-TCN,CGA-Matched,VIW-Transformer,DualTCN-Transformer,EO-CrossFormer,EO-CrossFormer-TF
+reverse_direction_inspected=false
+architecture_search_stops_after_this_screen=true
