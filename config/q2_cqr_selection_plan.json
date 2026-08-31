@@ -1,6 +1,7 @@
 {
   "release": true,
   "protocol": "training-side-cqr-v1",
+  "implementation_revision": "sparse-whole-segment-v2",
   "frozen_model": "IUW-TCN",
   "feature_mode": "raw_w",
   "candidate": "CQR",
