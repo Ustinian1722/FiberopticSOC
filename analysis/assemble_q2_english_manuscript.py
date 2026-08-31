@@ -7,12 +7,24 @@ OUT = ROOT / "paper" / "manuscript"
 OUT.mkdir(parents=True, exist_ok=True)
 
 front = (DOCS / "Q2_ENGLISH_FRONT_INTRO_V1.md").read_text(encoding="utf-8")
+abstract_final = (DOCS / "Q2_ABSTRACT_EN_FINAL.md").read_text(encoding="utf-8")
 sec23 = (DOCS / "Q2_ENGLISH_SECTIONS2_3_V1.md").read_text(encoding="utf-8")
 sec46 = (DOCS / "Q2_ENGLISH_SECTIONS4_6_V1.md").read_text(encoding="utf-8")
 captions = (DOCS / "Q2_MAIN_FIGURE_CAPTIONS_EN.md").read_text(encoding="utf-8")
 
 # Internal recent-reference key remains a drafting resource and is not placed mid-manuscript.
 front_main = front.split("## Recent-reference key used in this draft", 1)[0].rstrip()
+
+# Replace the longer drafting abstract with the final 250-word submission abstract.
+abstract_body = abstract_final.split("\n", 2)[-1].strip()
+front_main = re.sub(
+    r"## Abstract\n\n.*?\n\n## Keywords",
+    f"## Abstract\n\n{abstract_body}\n\n## Keywords",
+    front_main,
+    count=1,
+    flags=re.S,
+)
+
 sec23_main = re.sub(r"^# English manuscript V1 — Sections 2–3\s*", "", sec23).strip()
 sec46_main = re.sub(r"^# English manuscript V1 — Sections 4–6\s*", "", sec46).strip()
 
@@ -62,6 +74,14 @@ placeholder_lines = [line for line in manuscript.splitlines() if "placeholder" i
 if any(("Fig. 1" not in line and "Fig. 3" not in line and "final artwork" not in line.lower()) for line in placeholder_lines):
     raise SystemExit(f"Unexpected placeholder text: {placeholder_lines}")
 
+# Abstract length contract: keep the submission abstract compact.
+abstract_match = re.search(r"## Abstract\n\n(.*?)\n\n## Keywords", manuscript, re.S)
+if abstract_match is None:
+    raise SystemExit("Abstract section not found")
+abstract_words = len(re.findall(r"\b[\w’'-]+\b", abstract_match.group(1)))
+if abstract_words > 250:
+    raise SystemExit(f"Abstract too long: {abstract_words} words")
+
 out_path = OUT / "Q2_ENGLISH_MANUSCRIPT_V1.md"
 out_path.write_text(manuscript, encoding="utf-8")
 
@@ -71,12 +91,13 @@ report = [
     "",
     f"- output: `{out_path.relative_to(ROOT)}`",
     f"- approximate word count including tables/captions: **{words:,}**",
+    f"- final abstract length: **{abstract_words} words**",
     f"- required canonical numerical claims: **{len(required)}/{len(required)} present**",
     "- banned/obsolete claim check: **PASS**",
     "- section structure check: **PASS**",
     "- intended artwork placeholders only: **PASS**",
     "",
-    "The reference list is intentionally not auto-generated here. The seven verified recent references remain in the drafting files and will be merged with classic SOC/TCN/FBG/conformal references through the final reference manager.",
+    "The reference list is intentionally not auto-generated here. The verified recent and canonical references are maintained in `docs/Q2_REFERENCE_SHORTLIST_VERIFIED.md` and will be formatted through the final reference manager.",
 ]
 (OUT / "Q2_ENGLISH_MANUSCRIPT_ASSEMBLY_REPORT.md").write_text("\n".join(report) + "\n", encoding="utf-8")
 print("\n".join(report))
