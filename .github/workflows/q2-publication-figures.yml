@@ -1,0 +1,135 @@
+name: Q2 publication figures
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/eo-gated-mamba-paper
+    paths:
+      - "analysis/make_q2_publication_figures.py"
+      - "analysis/run_q2_final_t1_paper.py"
+      - "paper/source_data/**"
+      - "paper/figures/**"
+      - "docs/Q2_FIGURE_STATUS.md"
+      - ".github/workflows/q2-publication-figures.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      MPLBACKEND: Agg
+
+    steps:
+      - name: Checkout paper branch
+        uses: actions/checkout@v4
+
+      - name: Checkout public nature-figure skill
+        uses: actions/checkout@v4
+        with:
+          repository: Yuan1z0825/nature-skills
+          path: .nature-skills
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install figure and analysis dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 \
+            scikit-learn==1.8.0 matplotlib==3.10.5 pillow==11.3.0 \
+            pymupdf==1.26.4
+          python -m pip install --disable-pip-version-check torch==2.8.0 \
+            --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Stage and verify SiC-18 archive
+        run: |
+          mkdir -p data/extracted/SiC-18
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  SiC-18.zip" | sha256sum -c -
+          unzip -q SiC-18.zip -d data/extracted/SiC-18
+
+      - name: Nature-figure static preflight
+        run: |
+          mkdir -p paper/figures/generated/qa
+          python .nature-skills/skills/nature-figure/scripts/validate_figure.py \
+            analysis/make_q2_publication_figures.py --backend python --json \
+            > paper/figures/generated/qa/static_preflight.json || true
+          # Project-level intentional exception: Times-style serif replaces the upstream
+          # Arial/sans-serif default. Editable SVG text and vector/raster export remain mandatory.
+          grep -F 'plt.rcParams["svg.fonttype"] = "none"' analysis/make_q2_publication_figures.py
+          grep -F 'Times New Roman' analysis/make_q2_publication_figures.py
+          grep -F 'DPI = 600' analysis/make_q2_publication_figures.py
+
+      - name: Reproduce fixed RA-FBG-TCN blocked-T1 predictions
+        run: |
+          PYTHONPATH=analysis python analysis/run_q2_final_t1_paper.py \
+            --data data/extracted/SiC-18 \
+            --out-dir results/figure_t1/RA-FBG-TCN \
+            --model RA-FBG-TCN --seed 42 \
+            --window 64 --train-stride 2 --eval-stride 1 \
+            --batch-size 256 --max-epochs 50 --min-epochs 10 \
+            --patience 7 --min-delta 0.00005
+
+      - name: Render publication data figures
+        run: |
+          python analysis/make_q2_publication_figures.py \
+            --data-root data/extracted/SiC-18 \
+            --source-data paper/source_data \
+            --t1-dir results/figure_t1/RA-FBG-TCN \
+            --out-dir paper/figures/generated \
+            --generated-source-data paper/figures/generated/source_data \
+            --qa-json paper/figures/generated/figure_manifest.json
+
+      - name: Audit exported PDF text sizes
+        run: |
+          set -euo pipefail
+          for pdf in paper/figures/generated/fig*.pdf; do
+            base="$(basename "${pdf%.pdf}")"
+            python .nature-skills/skills/nature-figure/scripts/audit_pdf_text.py \
+              "$pdf" --min-pt 5 --json \
+              > "paper/figures/generated/qa/${base}_text.json"
+          done
+
+      - name: Audit rendered collisions
+        continue-on-error: true
+        run: |
+          set +e
+          for pdf in paper/figures/generated/fig*.pdf; do
+            base="$(basename "${pdf%.pdf}")"
+            python .nature-skills/skills/nature-figure/scripts/audit_figure_collisions.py \
+              "$pdf" \
+              --json-out "paper/figures/generated/qa/${base}_collisions.json" \
+              --overlay-pdf "paper/figures/generated/qa/${base}_collision_overlay.pdf"
+          done
+          exit 0
+
+      - name: Verify figure contract
+        run: |
+          test -s paper/figures/generated/fig1_dataset_signals.svg
+          test -s paper/figures/generated/fig2_representation_analysis.svg
+          test -s paper/figures/generated/fig4_conventional_soc_prediction.svg
+          test -s paper/figures/generated/fig5_electrical_ood_optical_gain.svg
+          test -s paper/figures/generated/fig6_cross_rate_unseen_profile.svg
+          test -s paper/figures/generated/fig7_noise_and_uncertainty.svg
+          test -s paper/figures/generated/source_data/fig4_t1_predictions_uq.csv
+          test -s paper/figures/generated/figure_manifest.json
+
+      - name: Upload publication figure package
+        uses: actions/upload-artifact@v4
+        with:
+          name: q2-publication-figures-v1
+          path: |
+            paper/figures/generated/**
+            paper/source_data/**
+            paper/figures/FIG3_PLACEHOLDER.md
+            docs/Q2_FIGURE_STATUS.md
+          retention-days: 90
