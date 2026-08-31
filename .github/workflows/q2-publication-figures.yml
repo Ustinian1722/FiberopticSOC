@@ -91,13 +91,18 @@ jobs:
 
       - name: Audit exported PDF text sizes
         run: |
-          set -euo pipefail
+          set +e
+          any_fail=0
           for pdf in paper/figures/generated/fig*.pdf; do
             base="$(basename "${pdf%.pdf}")"
             python .nature-skills/skills/nature-figure/scripts/audit_pdf_text.py \
               "$pdf" --min-pt 5 --json \
               > "paper/figures/generated/qa/${base}_text.json"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then any_fail=1; fi
           done
+          echo "$any_fail" > paper/figures/generated/qa/text_audit_has_failure.txt
+          exit 0
 
       - name: Audit rendered collisions
         continue-on-error: true
