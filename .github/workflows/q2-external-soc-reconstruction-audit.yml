@@ -6,6 +6,7 @@ on:
     branches: [research/eo-gated-mamba-paper]
     paths:
       - "config/START_Q2_EXTERNAL_SOC_RECONSTRUCTION"
+      - "config/START_Q2_EXTERNAL_SOC_RECONSTRUCTION_V2"
 
 concurrency:
   group: q2-external-soc-reconstruction-audit
