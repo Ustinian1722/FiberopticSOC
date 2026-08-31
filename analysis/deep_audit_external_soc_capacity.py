@@ -12,7 +12,21 @@ CELLS = ("A1", "A2", "P1", "P2")
 TIME_COL = "Time / yyyy-mm-ddTHH:MM:SS.FFF"
 CURRENT_THRESHOLD_A = 0.05
 MAX_CONTIGUOUS_DT_S = 30.0
-NOMINAL_RATES = np.array([0.2, 0.5, 1.0], dtype=float)
+
+# Protocol-defined nominal cell capacity and current levels from the external paper.
+NOMINAL_CELL_CAPACITY_AH = 10.0
+CALIBRATION_RATE_C = 0.04
+CALIBRATION_CURRENT_A = NOMINAL_CELL_CAPACITY_AH * CALIBRATION_RATE_C  # 0.4 A
+CALIBRATION_CURRENT_REL_TOL = 0.10
+CALIBRATION_MIN_DURATION_S = 20.0 * 3600.0
+CALIBRATION_MIN_CAPACITY_AH = 8.0
+
+VALIDATION_RATE_TO_CURRENT_A = {0.2: 2.0, 0.5: 5.0, 1.0: 10.0}
+VALIDATION_CURRENT_REL_TOL = 0.10
+VALIDATION_MIN_CAPACITY_FRACTION = 0.65
+VALIDATION_MIN_S5_FRACTION = 0.95
+VALIDATION_MAX_VOLTAGE_MIN_V = 3.05
+VALIDATION_MIN_START_VOLTAGE_V = 3.8
 
 
 @dataclass
@@ -129,7 +143,6 @@ class CellTracker:
         assert self.current_segment is not None
         self.current_segment.update_scalar(time_str, i, u, s5)
 
-        # Integrate only adjacent samples belonging to the same active state.
         if (
             self.prev_state == state
             and np.isfinite(dt)
@@ -186,52 +199,81 @@ def scan_file(path: Path, dataset: str, chunksize: int) -> tuple[pd.DataFrame, p
 
 def select_full_calibration_discharges(segments: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     dis = segments[(segments.dataset == "initial_calibration") & (segments.state == "discharge")].copy()
-    # Paper protocol: three 0.04C cycles with one-minute rests. Remove tiny instrumentation fragments;
-    # then select the three largest discharge capacities for each cell, without using validation data.
-    dis = dis[(dis.duration_s >= 3600) & (dis.integrated_ah >= 1.0)].copy()
-    selected = (
-        dis.sort_values(["cell", "integrated_ah"], ascending=[True, False])
-        .groupby("cell", as_index=False, group_keys=False)
-        .head(3)
-        .copy()
+    dis["cal_current_rel_error"] = (dis.mean_abs_current_A - CALIBRATION_CURRENT_A).abs() / CALIBRATION_CURRENT_A
+    dis["is_protocol_0p04C"] = (
+        (dis.cal_current_rel_error <= CALIBRATION_CURRENT_REL_TOL)
+        & (dis.duration_s >= CALIBRATION_MIN_DURATION_S)
+        & (dis.integrated_ah >= CALIBRATION_MIN_CAPACITY_AH)
+        & (dis.voltage_min <= VALIDATION_MAX_VOLTAGE_MIN_V)
     )
+    selected = dis[dis.is_protocol_0p04C].copy()
+
+    counts = selected.groupby("cell").size().to_dict()
+    for c in CELLS:
+        if counts.get(c, 0) != 3:
+            candidates = dis[dis.cell == c][
+                ["segment_id", "mean_abs_current_A", "duration_s", "integrated_ah", "voltage_min", "cal_current_rel_error", "is_protocol_0p04C"]
+            ]
+            raise RuntimeError(
+                f"Expected exactly three protocol 0.04C discharges for {c}, found {counts.get(c, 0)}.\n"
+                + candidates.to_string(index=False)
+            )
+
     cap_rows = []
     for c in CELLS:
-        s = selected[selected.cell == c]
-        if len(s) != 3:
-            raise RuntimeError(f"Expected three full initial 0.04C discharges for {c}, found {len(s)}")
+        s = selected[selected.cell == c].sort_values("start_time")
         capacities = s.integrated_ah.to_numpy(dtype=float)
+        currents = s.mean_abs_current_A.to_numpy(dtype=float)
         cap_rows.append(
             {
                 "cell": c,
                 "n_reference_discharges": len(s),
+                "mean_reference_current_A": float(np.mean(currents)),
                 "Q_ref_Ah_mean": float(np.mean(capacities)),
                 "Q_ref_Ah_std": float(np.std(capacities, ddof=1)),
                 "Q_ref_Ah_min": float(np.min(capacities)),
                 "Q_ref_Ah_max": float(np.max(capacities)),
                 "relative_range": float((np.max(capacities) - np.min(capacities)) / np.mean(capacities)),
-                "source": "three largest full discharge segments in Initial_referenceless_strain_calibration.csv",
+                "source": "exactly three long ~0.4 A discharge segments from Initial_referenceless_strain_calibration.csv",
                 "paper_protocol": "three 0.04C cycles at 25C; SOC referenced to initial discharge capacity",
             }
         )
     return selected, pd.DataFrame(cap_rows)
 
 
+def assign_validation_rate(mean_abs_current_A: float) -> tuple[float, float, float]:
+    if not np.isfinite(mean_abs_current_A):
+        return np.nan, np.nan, np.nan
+    rates = np.array(list(VALIDATION_RATE_TO_CURRENT_A.keys()), dtype=float)
+    currents = np.array(list(VALIDATION_RATE_TO_CURRENT_A.values()), dtype=float)
+    idx = int(np.argmin(np.abs(currents - mean_abs_current_A)))
+    assigned_rate = float(rates[idx])
+    expected_current = float(currents[idx])
+    rel_error = abs(float(mean_abs_current_A) - expected_current) / expected_current
+    if rel_error > VALIDATION_CURRENT_REL_TOL:
+        return np.nan, expected_current, rel_error
+    return assigned_rate, expected_current, rel_error
+
+
 def annotate_validation(segments: pd.DataFrame, capacities: pd.DataFrame) -> pd.DataFrame:
     val = segments[(segments.dataset == "constant_current_validation") & (segments.state == "discharge")].copy()
     qmap = capacities.set_index("cell").Q_ref_Ah_mean.to_dict()
     val["Q_ref_Ah"] = val.cell.map(qmap)
-    val["observed_C_rate"] = val.mean_abs_current_A / val.Q_ref_Ah
-    val["nearest_nominal_C_rate"] = val.observed_C_rate.map(lambda x: float(NOMINAL_RATES[np.argmin(np.abs(NOMINAL_RATES - x))]) if np.isfinite(x) else np.nan)
-    val["C_rate_abs_error"] = (val.observed_C_rate - val.nearest_nominal_C_rate).abs()
-    val["SOC_end_from_Qref"] = 1.0 - val.integrated_ah / val.Q_ref_Ah
+
+    assigned = val.mean_abs_current_A.map(assign_validation_rate)
+    val["assigned_rate_C"] = assigned.map(lambda x: x[0])
+    val["expected_current_A"] = assigned.map(lambda x: x[1])
+    val["current_rel_error"] = assigned.map(lambda x: x[2])
+    val["capacity_fraction_of_Qref"] = val.integrated_ah / val.Q_ref_Ah
+    val["SOC_end_from_Qref"] = 1.0 - val.capacity_fraction_of_Qref
+
     val["eligible_full_validation_discharge"] = (
-        (val.duration_s >= 1200)
-        & (val.integrated_ah >= 0.5)
-        & (val.s5_valid_fraction >= 0.95)
-        & (val.C_rate_abs_error <= 0.15)
-        & (val.voltage_start >= 4.0)
-        & (val.voltage_end <= 3.3)
+        val.assigned_rate_C.notna()
+        & (val.current_rel_error <= VALIDATION_CURRENT_REL_TOL)
+        & (val.capacity_fraction_of_Qref >= VALIDATION_MIN_CAPACITY_FRACTION)
+        & (val.s5_valid_fraction >= VALIDATION_MIN_S5_FRACTION)
+        & (val.voltage_min <= VALIDATION_MAX_VOLTAGE_MIN_V)
+        & (val.voltage_start >= VALIDATION_MIN_START_VOLTAGE_V)
     )
     return val
 
@@ -253,12 +295,16 @@ def main() -> None:
 
     eligible = val_dis[val_dis.eligible_full_validation_discharge].copy()
     coverage = (
-        eligible.groupby(["cell", "nearest_nominal_C_rate"], as_index=False)
+        eligible.groupby(["cell", "assigned_rate_C"], as_index=False)
         .agg(
             n_discharges=("segment_id", "size"),
-            mean_observed_C_rate=("observed_C_rate", "mean"),
+            mean_observed_current_A=("mean_abs_current_A", "mean"),
+            mean_current_rel_error=("current_rel_error", "mean"),
+            mean_capacity_fraction_of_Qref=("capacity_fraction_of_Qref", "mean"),
+            min_capacity_fraction_of_Qref=("capacity_fraction_of_Qref", "min"),
             mean_end_SOC=("SOC_end_from_Qref", "mean"),
             mean_S5_valid_fraction=("s5_valid_fraction", "mean"),
+            mean_voltage_min_V=("voltage_min", "mean"),
         )
     )
 
@@ -274,13 +320,30 @@ def main() -> None:
         "current_sign": "positive=discharge",
         "current_threshold_A": CURRENT_THRESHOLD_A,
         "max_contiguous_dt_s": MAX_CONTIGUOUS_DT_S,
-        "capacity_reference": "mean of the three full initial 0.04C discharge capacities per cell",
+        "nominal_cell_capacity_Ah": NOMINAL_CELL_CAPACITY_AH,
+        "calibration_protocol": {
+            "rate_C": CALIBRATION_RATE_C,
+            "expected_current_A": CALIBRATION_CURRENT_A,
+            "current_relative_tolerance": CALIBRATION_CURRENT_REL_TOL,
+            "minimum_duration_s": CALIBRATION_MIN_DURATION_S,
+            "minimum_capacity_Ah": CALIBRATION_MIN_CAPACITY_AH,
+        },
+        "validation_protocol": {
+            "rate_to_expected_current_A": {str(k): v for k, v in VALIDATION_RATE_TO_CURRENT_A.items()},
+            "current_relative_tolerance": VALIDATION_CURRENT_REL_TOL,
+            "minimum_capacity_fraction_of_Qref": VALIDATION_MIN_CAPACITY_FRACTION,
+            "minimum_S5_valid_fraction": VALIDATION_MIN_S5_FRACTION,
+            "maximum_voltage_min_V": VALIDATION_MAX_VOLTAGE_MIN_V,
+        },
+        "capacity_reference": "mean of exactly three long ~0.4 A initial 0.04C discharge capacities per cell",
         "reference_capacities_Ah": capacities.set_index("cell").Q_ref_Ah_mean.to_dict(),
         "eligible_validation_discharges": int(len(eligible)),
         "coverage_rows": coverage.to_dict("records"),
-        "label_definition": "SOC(t)=1-cumulative positive-current discharge Ah / Q_ref for each full validation discharge starting fully charged",
+        "label_definition": "SOC(t)=1-cumulative positive-current discharge Ah / Q_ref for each eligible full validation discharge starting fully charged",
     }
     (args.out_dir / "external_soc_reconstruction_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    print("=== selected 0.04C reference segments ===")
+    print(selected[["cell", "segment_id", "mean_abs_current_A", "duration_s", "integrated_ah", "voltage_min", "cal_current_rel_error"]].to_string(index=False))
     print("=== reference capacities ===")
     print(capacities.to_string(index=False))
     print("=== eligible constant-current coverage ===")
