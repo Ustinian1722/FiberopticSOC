@@ -1,7 +1,7 @@
 # English manuscript V2 assembly report
 
 - output: `paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md`
-- approximate word count including tables/captions/references: **8,235**
+- approximate word count including tables/captions/references: **8,080**
 - final abstract length: **250 words**
 - required canonical numerical claims: **16/16 present**
 - banned/obsolete claim check: **PASS**
