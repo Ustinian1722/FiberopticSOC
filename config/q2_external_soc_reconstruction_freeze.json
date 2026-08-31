@@ -1,0 +1,37 @@
+{
+  "status": "FROZEN_EXTERNAL_LABEL_RECONSTRUCTION_V2",
+  "source_run_id": 33358353945,
+  "source_artifact_id": 9745932868,
+  "source_head_sha": "e9b502e704748561f24148c6eab52e982da02694",
+  "validation_zip_md5": "1566c4f4df6550dfecd30c9d6e003bab",
+  "calibration_zip_md5": "cad69880d6015c91226ed69844508a65",
+  "cells": ["A1", "A2", "P1", "P2"],
+  "q_ref_Ah": {
+    "A1": 10.28531298399785,
+    "A2": 10.27040649926079,
+    "P1": 10.884552218263446,
+    "P2": 10.771930471456836
+  },
+  "n_reference_discharges_per_cell": 3,
+  "reference_rule": "exactly three long approximately 0.4 A initial 0.04C discharge segments per cell; duration >=72000 s; capacity >=8 Ah; current within 10% of 0.4 A",
+  "validation_rule": "positive-current full discharges at approximately 2, 5, or 10 A only; assigned to 0.2C, 0.5C, 1C; current within 10%; capacity >=65% Q_ref; S5 valid >=95%; min voltage <=3.05 V",
+  "eligible_validation_discharges": 52,
+  "coverage_counts": {
+    "A1_0.2C": 4,
+    "A1_0.5C": 4,
+    "A1_1C": 6,
+    "A2_0.2C": 3,
+    "A2_0.5C": 4,
+    "A2_1C": 5,
+    "P1_0.2C": 4,
+    "P1_0.5C": 4,
+    "P1_1C": 6,
+    "P2_0.2C": 2,
+    "P2_0.5C": 4,
+    "P2_1C": 6
+  },
+  "soc_definition": "SOC(t)=1-cumulative positive-current discharge Ah / Q_ref from the start of each frozen validation discharge; no end-point rescaling",
+  "sensor_mainline": "S5 relative Bragg shift: S5_rel(t)=S5(t)-S5(start of current frozen discharge)",
+  "absolute_s5_mainline": false,
+  "external_target_eligible_for_SiC_model_selection": false
+}
