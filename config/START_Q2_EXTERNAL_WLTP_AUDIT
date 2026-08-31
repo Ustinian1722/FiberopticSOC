@@ -1,0 +1,10 @@
+release=true
+purpose=external_E3_WLTP_structure_audit
+cells=P1,P2
+source=official_validation_zip
+wltp_file=validation_WLTP_cycling.csv
+soc_reference=frozen_initial_0p04C_Qref
+use_real_timestamps=true
+integrate_signed_current=true
+modeling_allowed=false
+SiC_model_selection_reopened=false
