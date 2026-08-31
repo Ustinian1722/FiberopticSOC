@@ -1,0 +1,39 @@
+name: Q2 English manuscript assembly
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/eo-gated-mamba-paper]
+    paths:
+      - "docs/Q2_ENGLISH_FRONT_INTRO_V1.md"
+      - "docs/Q2_ENGLISH_SECTIONS2_3_V1.md"
+      - "docs/Q2_ENGLISH_SECTIONS4_6_V1.md"
+      - "docs/Q2_MAIN_FIGURE_CAPTIONS_EN.md"
+      - "analysis/assemble_q2_english_manuscript.py"
+      - ".github/workflows/q2-manuscript-assembly.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Assemble and lint manuscript
+        run: python analysis/assemble_q2_english_manuscript.py
+      - name: Verify manuscript contract
+        run: |
+          test -s paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V1.md
+          test -s paper/manuscript/Q2_ENGLISH_MANUSCRIPT_ASSEMBLY_REPORT.md
+          grep -F '# 6. Conclusion' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V1.md
+          grep -F '48.52%' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V1.md
+          grep -F '95.04%' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V1.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-english-manuscript-v1
+          path: paper/manuscript/**
+          retention-days: 90
