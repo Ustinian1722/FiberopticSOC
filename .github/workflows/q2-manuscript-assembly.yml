@@ -6,6 +6,7 @@ on:
     branches: [research/eo-gated-mamba-paper]
     paths:
       - "docs/Q2_ENGLISH_FRONT_INTRO_V1.md"
+      - "docs/Q2_ABSTRACT_EN_FINAL.md"
       - "docs/Q2_ENGLISH_SECTIONS2_3_V1.md"
       - "docs/Q2_ENGLISH_SECTIONS4_6_V1.md"
       - "docs/Q2_MAIN_FIGURE_CAPTIONS_EN.md"
@@ -32,6 +33,7 @@ jobs:
           grep -F '# 6. Conclusion' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V1.md
           grep -F '48.52%' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V1.md
           grep -F '95.04%' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V1.md
+          grep -F 'final abstract length: **250 words**' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_ASSEMBLY_REPORT.md
       - uses: actions/upload-artifact@v4
         with:
           name: q2-english-manuscript-v1
