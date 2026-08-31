@@ -1,0 +1,3 @@
+direction,fraction_windows_any_ood,vi_mae,viw_mae,pearson_ood_gain,spearman_ood_gain
+1C_to_2C,0.5264,0.021507,0.016316,0.405,0.2879
+2C_to_1C,0.0,0.008657,0.008135,,
