@@ -1,0 +1,49 @@
+name: Q2 external FBG validation audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/eo-gated-mamba-paper]
+    paths:
+      - "config/START_Q2_EXTERNAL_FBG_AUDIT"
+
+concurrency:
+  group: q2-external-fbg-audit
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install audit dependencies
+        run: python -m pip install --disable-pip-version-check pandas==2.3.2 openpyxl==3.1.5 xlrd==2.0.2
+      - name: Download official validation archive
+        run: |
+          mkdir -p external/raw external/extracted
+          curl -L --fail --retry 8 --retry-all-errors --connect-timeout 30 \
+            'https://zenodo.org/records/15388590/files/validation.zip?download=1' \
+            -o external/raw/validation.zip
+          echo '1566c4f4df6550dfecd30c9d6e003bab  external/raw/validation.zip' | md5sum -c -
+          unzip -q external/raw/validation.zip -d external/extracted/validation
+          du -sh external/raw/validation.zip external/extracted/validation
+      - name: Audit archive structure and headers
+        run: |
+          python -m py_compile analysis/audit_external_fbg_validation.py
+          python analysis/audit_external_fbg_validation.py \
+            --root external/extracted/validation \
+            --out-dir results/external_fbg_audit
+          find external/extracted/validation -maxdepth 4 -type f -printf '%p\t%s bytes\n' | sort > results/external_fbg_audit/archive_tree.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-external-fbg-validation-audit
+          path: results/external_fbg_audit/**
+          retention-days: 30
