@@ -8,10 +8,12 @@ on:
     paths:
       - "analysis/make_q2_publication_figures.py"
       - "analysis/fix_q2_publication_figures.py"
+      - "analysis/finalize_q2_fig2_correlation.py"
       - "analysis/run_q2_final_t1_paper.py"
       - "paper/source_data/**"
       - "paper/figures/**"
       - "docs/Q2_FIGURE_STATUS.md"
+      - "docs/Q2_MAIN_FIGURE_CAPTIONS_CN.md"
       - ".github/workflows/q2-publication-figures.yml"
 
 permissions:
@@ -61,12 +63,13 @@ jobs:
       - name: Nature-figure static preflight
         run: |
           mkdir -p paper/figures/generated/qa
-          python -m py_compile analysis/make_q2_publication_figures.py analysis/fix_q2_publication_figures.py
+          python -m py_compile \
+            analysis/make_q2_publication_figures.py \
+            analysis/fix_q2_publication_figures.py \
+            analysis/finalize_q2_fig2_correlation.py
           python .nature-skills/skills/nature-figure/scripts/validate_figure.py \
             analysis/make_q2_publication_figures.py --backend python --json \
             > paper/figures/generated/qa/static_preflight.json || true
-          # Project-level intentional exception: Times-style serif replaces the upstream
-          # Arial/sans-serif default. Editable SVG text and vector/raster export remain mandatory.
           grep -F 'plt.rcParams["svg.fonttype"] = "none"' analysis/make_q2_publication_figures.py
           grep -F 'Times New Roman' analysis/make_q2_publication_figures.py
           grep -F 'DPI = 600' analysis/make_q2_publication_figures.py
@@ -91,14 +94,21 @@ jobs:
             --generated-source-data paper/figures/generated/source_data \
             --qa-json paper/figures/generated/figure_manifest.json
 
-      - name: Apply V2 publication layout fixes
+      - name: Apply publication layout fixes
         run: |
           PYTHONPATH=analysis python analysis/fix_q2_publication_figures.py \
             --data-root data/extracted/SiC-18 \
             --source-data paper/source_data \
             --predictions results/figure_t1/RA-FBG-TCN/uq/test_intervals.csv \
             --out-dir paper/figures/generated
-          echo "v2_layout_fixes_applied=true" > paper/figures/generated/V2_LAYOUT_STATUS.txt
+
+      - name: Finalize Fig2 correlation panel
+        run: |
+          PYTHONPATH=analysis python analysis/finalize_q2_fig2_correlation.py \
+            --data-root data/extracted/SiC-18 \
+            --source-data paper/source_data \
+            --out-dir paper/figures/generated
+          echo "final_layout_applied=true" > paper/figures/generated/FINAL_LAYOUT_STATUS.txt
 
       - name: Audit exported PDF text sizes
         run: |
@@ -116,7 +126,6 @@ jobs:
           exit 0
 
       - name: Audit rendered collisions
-        continue-on-error: true
         run: |
           set +e
           for pdf in paper/figures/generated/fig*.pdf; do
@@ -128,7 +137,7 @@ jobs:
           done
           exit 0
 
-      - name: Verify V2 figure contract
+      - name: Verify final figure contract and strict QA
         run: |
           test -s paper/figures/generated/fig1_dataset_signals.svg
           test -s paper/figures/generated/fig2_representation_analysis.svg
@@ -138,13 +147,25 @@ jobs:
           test -s paper/figures/generated/fig7_noise_and_uncertainty.svg
           test -s paper/figures/generated/source_data/fig4_t1_predictions_uq.csv
           test -s paper/figures/generated/figure_manifest.json
-          test -s paper/figures/generated/V2_LAYOUT_STATUS.txt
+          test -s paper/figures/generated/FINAL_LAYOUT_STATUS.txt
           test "$(cat paper/figures/generated/qa/text_audit_has_failure.txt)" = "0"
+          python - <<'PY'
+          import glob, json
+          bad=[]
+          for path in glob.glob('paper/figures/generated/qa/*_collisions.json'):
+              d=json.load(open(path))
+              s=d.get('summary',{})
+              if s.get('fail',0) or s.get('warn',0):
+                  bad.append((path,s,d.get('verdict')))
+          if bad:
+              raise SystemExit(f'Collision QA not clean: {bad}')
+          print('All collision audits: 0 fail / 0 warn')
+          PY
 
-      - name: Upload publication figure package
+      - name: Upload final publication figure package
         uses: actions/upload-artifact@v4
         with:
-          name: q2-publication-figures-v2
+          name: q2-publication-figures-final
           path: |
             paper/figures/generated/**
             paper/source_data/**
