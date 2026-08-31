@@ -1,4 +1,4 @@
-# Representation-aware dual-FBG optical sensing for robust battery state-of-charge estimation under operating-condition shifts
+# A dual-FBG-assisted lightweight temporal framework for robust battery state-of-charge estimation under changing operating conditions
 
 ## Abstract
 
@@ -18,7 +18,7 @@ State of charge; Fiber Bragg grating; Multimodal sensing; Temporal convolutional
 
 # 1. Introduction
 
-Accurate state-of-charge (SOC) estimation is a core function of battery management systems (BMSs), underpinning energy management, power allocation, charge/discharge control, and safety protection in electric vehicles and energy-storage systems. Because SOC cannot be measured directly, it must be inferred from accessible signals such as terminal voltage, current, and temperature. Under dynamic operation, however, polarization, transient voltage response, nonlinear electrochemical behavior, and changing load profiles alter the mapping between these electrical measurements and SOC. An estimator that performs well for familiar operating conditions may therefore degrade when discharge rate, load intensity, or driving profile changes during deployment.
+Accurate state-of-charge (SOC) estimation is a core function of battery management systems (BMSs), underpinning energy management, power allocation, charge/discharge control, and safety protection in electric vehicles and energy-storage systems. Because SOC cannot be measured directly, it must be inferred from accessible signals such as terminal voltage, current, and temperature. Under dynamic operation, polarization, transient voltage response, nonlinear electrochemical behavior, and changing load profiles alter the mapping between these electrical measurements and SOC. An estimator that performs well for familiar operating conditions may degrade when discharge rate, load intensity, or driving profile changes during deployment.
 
 Existing SOC estimation approaches can broadly be divided into model-based observer/filtering methods [8] and data-driven methods that learn nonlinear mappings from measured signals to SOC. Deep temporal architectures, including convolutional neural networks (CNNs), recurrent neural networks, temporal convolutional networks (TCNs), and Transformers, have achieved high accuracy on increasingly complex battery datasets. Recent studies have also moved beyond single-condition accuracy toward wide-temperature modeling, cross-material transfer, and multi-condition generalization [1,2]. A recent critical review emphasized the need for more standardized evaluation protocols and highlighted transfer, few-shot, and continual-learning capability as important future directions for SOC estimation [1]. These developments indicate that a practical estimator should be assessed not only by interpolation accuracy, but also by its response to operating-condition changes.
 
@@ -77,7 +77,7 @@ The center wavelength of an FBG is governed by
 \lambda_B = 2n_{\mathrm{eff}}\Lambda,
 \]
 
-where \(n_{\mathrm{eff}}\) denotes the effective refractive index and \(\Lambda\) is the grating period. Changes in temperature and strain modify both quantities and therefore shift the reflected Bragg wavelength. FBGs can consequently provide in-situ observations of local thermal and mechanical evolution through wavelength variation.
+where \(n_{\mathrm{eff}}\) denotes the effective refractive index and \(\Lambda\) is the grating period. Changes in temperature and strain modify both quantities, shifting the reflected Bragg wavelength. FBGs can consequently provide in-situ observations of local thermal and mechanical evolution through wavelength variation.
 
 For the dual-FBG system considered here, the two sensing channels have different thermal and mechanical sensitivities. The coefficients below are adopted directly from the published SiC-18 sensing relation [5] and retain the variable definitions and units used in the released data. The two wavelength responses and the decoupled temperature T and deformation-force-related quantity F approximately satisfy
 
@@ -114,7 +114,7 @@ T = 214.43W_1 - 136.23W_2,
 F = -6407.67W_1 + 5247.23W_2.
 \]
 
-This relationship is important for the modeling strategy adopted in this work. W1/W2 and T/F are not four independent sensing channels; rather, they are two coordinate systems describing the same two optical sensing degrees of freedom. T/F offers clearer physical interpretation for analyzing internal thermal and mechanical evolution, whereas W1/W2 preserves the native coordinates directly produced by the optical interrogation system. Whether the physically decoupled representation is also the most transferable representation for data-driven SOC estimation is therefore an empirical question rather than an assumption.
+This relationship is important for the modeling strategy adopted in this work. W1/W2 and T/F are not four independent sensing channels; rather, they are two coordinate systems describing the same two optical sensing degrees of freedom. T/F offers clearer physical interpretation for analyzing internal thermal and mechanical evolution, whereas W1/W2 preserves the native coordinates directly produced by the optical interrogation system. Whether the physically decoupled representation is also the most transferable representation for data-driven SOC estimation is an empirical question rather than an assumption.
 
 ## 2.3. Electrical–optical characteristics and representation analysis
 
@@ -122,19 +122,19 @@ This relationship is important for the modeling strategy adopted in this work. W
 
 Under a dynamic driving cycle, terminal voltage is jointly affected by SOC, ohmic drop, polarization, and instantaneous current. As a result, the electrical response can fluctuate rapidly even when SOC evolves smoothly. The implanted FBGs respond to internal thermo-mechanical evolution, whose characteristic time scales need not coincide with those of the terminal electrical variables. The synchronized sequences in Fig. 1 illustrate this difference: current contains high-frequency pulses, whereas the wavelength channels evolve more smoothly while retaining local responses to the changing load.
 
-The contrast becomes more pronounced when the discharge rate changes. Moving from 1C to 2C directly expands the current range and alters the terminal electrical response, whereas the FBG wavelengths continue to reflect the accumulated and coupled internal thermo-mechanical state. The optical measurements are therefore treated here as potentially complementary internal observations rather than as duplicate measurements of V/I. Section 4 evaluates this hypothesis using parameter-matched models and an electrical-OOD analysis.
+The contrast becomes more pronounced when the discharge rate changes. Moving from 1C to 2C directly expands the current range and alters the terminal electrical response, whereas the FBG wavelengths continue to reflect the accumulated and coupled internal thermo-mechanical state. The optical measurements are treated here as potentially complementary internal observations rather than as duplicate measurements of V/I. Section 4 evaluates this hypothesis using parameter-matched models and an electrical-OOD analysis.
 
 ### 2.3.2. Statistical structure of native and decoupled optical coordinates
 
 Although W1/W2 and T/F contain the same number of optical degrees of freedom, their statistical structures differ substantially. Figure 2(a,b) shows the joint distributions of the two representations over all 12 dynamic trajectories. When the data are grouped by C-rate, the absolute Pearson correlation between W1 and W2 is 0.738 at 1C and 0.655 at 2C. After thermo-mechanical decoupling, the corresponding absolute T/F correlations increase to 0.982 and 0.985, respectively, as summarized in Fig. 2(c). Thus, the two decoupled variables are much more linearly coupled in this dataset.
 
-This observation does not diminish the physical value of thermo-mechanical decoupling. Mapping the two measured wavelengths to temperature- and force-related coordinates provides clearer physical semantics and is useful for sensing-mechanism interpretation. However, the linear inversion also changes feature scale, correlation structure, and the way measurement perturbations propagate through the representation. For an end-to-end learning problem focused on cross-rate and unseen-profile transfer, a physically interpretable coordinate system should therefore not be assumed a priori to provide the most favorable predictive representation.
+This observation does not diminish the physical value of thermo-mechanical decoupling. Mapping the two measured wavelengths to temperature- and force-related coordinates provides clearer physical semantics and is useful for sensing-mechanism interpretation. However, the linear inversion also changes feature scale, correlation structure, and the way measurement perturbations propagate through the representation. For an end-to-end learning problem focused on cross-rate and unseen-profile transfer, a physically interpretable coordinate system should not be assumed a priori to provide the most favorable predictive representation.
 
 ### 2.3.3. Representation-aware predictive comparison
 
 To select the optical input representation, W1/W2 and T/F were compared under the same causal TCN architecture, training budget, and 1C→2C unseen-profile development protocol. Figure 2(d) reports the development-stage representation results. Across the six held-out-profile splits, the compact TCN using native W1/W2 achieved an average MAE of 1.385% SOC, RMSE of 2.084% SOC, and Q95 absolute error of 4.873% SOC. Replacing W1/W2 with the decoupled T/F coordinates increased the corresponding errors to 2.033%, 3.060%, and 6.835% SOC. A more complex electrical–thermo-mechanical fusion model (ETMF-TF) reduced the MAE to 1.569% SOC but still did not outperform the compact model operating directly in wavelength space.
 
-These results show that adding a physical interpretation layer does not necessarily improve predictive transfer under condition shift. Native W1/W2 preserves the complete dual-FBG measurement while avoiding an additional coordinate inversion and provides more stable average generalization in the matched experiments. The final estimator therefore uses V, I, W1, and W2 as inputs, whereas T/F is retained for sensing interpretation and representation ablation.
+These results show that adding a physical interpretation layer does not necessarily improve predictive transfer under condition shift. Native W1/W2 preserves the complete dual-FBG measurement while avoiding an additional coordinate inversion and provides more stable average generalization in the matched experiments. Accordingly, the final estimator uses V, I, W1, and W2 as inputs, whereas T/F is retained for sensing interpretation and representation ablation.
 
 Overall, the role of dual-FBG sensing in this work is not to stack wavelength, temperature, and force as redundant features. Instead, the optical system provides an internal observation pathway with a different physical origin from the terminal electrical measurements. Based on the preceding signal and representation analysis, the next section develops a lightweight causal estimator operating directly on the native dual-FBG wavelength coordinates.
 
@@ -190,9 +190,9 @@ and, when \(\mathbf{K}\) is invertible,
 \mathbf{z}=\mathbf{K}^{-1}\Delta\boldsymbol{\lambda}.
 \]
 
-The two representations therefore encode the same two measured optical degrees of freedom. Explicit decoupling improves physical semantics but does not introduce new sensing information. It also modifies the correlation and scale of the features and can alter the propagation of wavelength perturbations in feature space.
+The two representations encode the same two measured optical degrees of freedom. Explicit decoupling improves physical semantics but does not introduce new sensing information. It also modifies the correlation and scale of the features and can alter the propagation of wavelength perturbations in feature space.
 
-For this reason, representation choice is treated as part of model design. Native W1/W2 and decoupled T/F are evaluated using the same data partitions, model capacity, and training budget. The native wavelength representation gives lower average MAE, RMSE, and Q95 error in the cross-rate unseen-profile development comparison described in Section 2.3.3. RA-FBG-TCN therefore fixes W1/W2 as the optical inputs. This decision concerns predictive transferability and does not imply that T/F decoupling lacks value for physical interpretation.
+For this reason, representation choice is treated as part of model design. Native W1/W2 and decoupled T/F are evaluated using the same data partitions, model capacity, and training budget. The native wavelength representation gives lower average MAE, RMSE, and Q95 error in the cross-rate unseen-profile development comparison described in Section 2.3.3. RA-FBG-TCN consequently fixes W1/W2 as the optical inputs. This decision concerns predictive transferability and does not imply that T/F decoupling lacks value for physical interpretation.
 
 ## 3.3. Causal TCN SOC estimator
 
@@ -252,7 +252,7 @@ The final RA-FBG-TCN contains approximately 11.5k trainable parameters. The mode
 \mathcal{L}_{MSE}=\frac{1}{N}\sum_{i=1}^{N}(y_i-\hat{y}_i)^2,
 \]
 
-with AdamW. The implementation uses a learning rate of \(10^{-3}\), weight decay of \(10^{-4}\), gradient clipping at 2.0, and a batch size of 256. Training is limited to 50 epochs, with a minimum of 10 epochs and patience of 7 epochs. The model checkpoint with the lowest validation MAE is retained, and the validation set is never used for final test metrics. The main architecture and training settings are summarized in Table 2.
+with AdamW. Across experiments, the optimizer uses a learning rate of \(10^{-3}\), weight decay of \(10^{-4}\), gradient clipping at 2.0, and a batch size of 256. Training termination depends on the evaluation protocol. In the conventional blocked-interpolation experiment, training is capped at 50 epochs and uses validation-MAE early stopping with a minimum of 10 epochs and patience of 7. For the strict cross-rate plus unseen-profile experiments, target-domain observations are not used for early stopping. Instead, a source-only nested profile-validation procedure is run before target evaluation, and the resulting split-specific epoch counts are frozen. The final strict experiments use these fixed budgets, which range from 29 to 65 epochs across the 12 direction/profile splits. This distinction prevents target-condition performance from influencing training duration. The main architecture and protocol-specific training settings are summarized in Table 2.
 
 **Table 2. Main RA-FBG-TCN architecture and training settings.**
 
@@ -274,8 +274,9 @@ with AdamW. The implementation uses a learning rate of \(10^{-3}\), weight decay
 | Weight decay | 1×10⁻⁴ |
 | Gradient clipping | 2.0 |
 | Batch size | 256 |
-| Maximum epochs | 50 |
-| Early stopping | Validation MAE, minimum 10 epochs, patience 7 |
+| Conventional blocked training | Maximum 50 epochs; validation-MAE early stopping, minimum 10 epochs, patience 7 |
+| Strict transfer training | Source-only selected fixed epochs; 29–65 epochs across the 12 frozen splits |
+| Target-domain early stopping | Not used in strict cross-rate/unseen-profile evaluation |
 
 ## 3.4. Residual split-conformal uncertainty quantification
 
