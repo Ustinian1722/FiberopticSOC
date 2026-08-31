@@ -1,0 +1,58 @@
+name: Q2 external WLTP SOC structure audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/eo-gated-mamba-paper]
+    paths:
+      - "config/START_Q2_EXTERNAL_WLTP_AUDIT"
+
+concurrency:
+  group: q2-external-wltp-audit
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2
+      - name: Verify frozen external label reference
+        run: |
+          python - <<'PY'
+          import json
+          f=json.load(open('config/q2_external_soc_reconstruction_freeze.json'))
+          assert f['status']=='FROZEN_EXTERNAL_LABEL_RECONSTRUCTION_V2'
+          assert set(f['reference_capacities_Ah'])=={'A1','A2','P1','P2'}
+          assert f['external_target_eligible_for_SiC_model_selection'] is False
+          print('external label reference verified')
+          PY
+      - name: Download official validation archive
+        run: |
+          mkdir -p external/raw external/extracted/validation
+          curl -L --fail --retry 8 --retry-all-errors --connect-timeout 30 \
+            'https://zenodo.org/records/15388590/files/validation.zip?download=1' \
+            -o external/raw/validation.zip
+          echo '1566c4f4df6550dfecd30c9d6e003bab  external/raw/validation.zip' | md5sum -c -
+          unzip -q external/raw/validation.zip -d external/extracted/validation
+      - name: Audit WLTP sequence and SOC reconstruction
+        run: |
+          python -m py_compile analysis/audit_external_wltp_soc.py
+          python analysis/audit_external_wltp_soc.py \
+            --wltp-csv external/extracted/validation/validation_WLTP_cycling.csv \
+            --freeze config/q2_external_soc_reconstruction_freeze.json \
+            --out-dir results/external_wltp_audit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-external-wltp-audit
+          path: results/external_wltp_audit/**
+          retention-days: 30
