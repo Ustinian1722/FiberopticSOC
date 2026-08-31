@@ -32,7 +32,7 @@ jobs:
           import json
           f=json.load(open('config/q2_external_soc_reconstruction_freeze.json'))
           assert f['status']=='FROZEN_EXTERNAL_LABEL_RECONSTRUCTION_V2'
-          assert set(f['reference_capacities_Ah'])=={'A1','A2','P1','P2'}
+          assert set(f['q_ref_Ah'])=={'A1','A2','P1','P2'}
           assert f['external_target_eligible_for_SiC_model_selection'] is False
           print('external label reference verified')
           PY
