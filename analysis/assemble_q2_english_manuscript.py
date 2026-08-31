@@ -33,7 +33,6 @@ sec23_main = re.sub(r"^# English manuscript V1 — Sections 2–3\s*", "", sec23
 sec46_main = re.sub(r"^# English manuscript V2 — Sections 4–6\s*", "", sec46).strip()
 captions_main = captions.split("\n", 1)[1].strip()
 references_main = references.strip()
-# Remove repository-only bibliography drafting note from the assembled manuscript.
 references_main = re.sub(r"\n> Drafting note:.*$", "", references_main, flags=re.S).rstrip()
 
 # Reviewer-risk editorial patches. These alter wording/citations only, never numerical evidence.
@@ -58,6 +57,10 @@ sec23_patches = [
         "This study uses the publicly available SiC-18 dataset previously reported for an instrumented SiOx/C pouch-type lithium-ion cell [5]. The cell contains two embedded fiber Bragg grating (FBG) sensors.",
     ),
     (
+        "For the dual-FBG system considered here, the two sensing channels have different thermal and mechanical sensitivities. In the released dataset, the two wavelength responses and the decoupled temperature T and deformation-force-related quantity F approximately satisfy",
+        "For the dual-FBG system considered here, the two sensing channels have different thermal and mechanical sensitivities. The coefficients below are adopted directly from the published SiC-18 sensing relation [5] and retain the variable definitions and units used in the released data. The two wavelength responses and the decoupled temperature T and deformation-force-related quantity F approximately satisfy",
+    ),
+    (
         "A representation-aware dual-FBG temporal convolutional network, denoted RA-FBG-TCN, is developed for SOC estimation under dynamic loads and changing operating conditions.",
         "A representation-aware dual-FBG temporal convolutional network, denoted RA-FBG-TCN, is developed for SOC estimation under dynamic loads and changing operating conditions. The temporal backbone follows the causal/dilated convolutional sequence-modeling principle established for TCNs [9].",
     ),
@@ -77,8 +80,12 @@ sec46_patches = [
         "Figure 7(c) illustrates the point estimate and calibrated interval over a representative test segment. These empirical coverage results pertain to the blocked mixed-condition calibration/test regime; no formal 95% coverage guarantee is claimed here for arbitrary cross-rate or unseen-profile distribution shift. The result nevertheless shows that a simple post-hoc conformal layer can supplement the deterministic point estimator with an uncertainty interval whose empirical coverage is aligned with the nominal level, without requiring a second probabilistic neural network.",
     ),
     (
+        "The blocked-interpolation experiment shows that an electrical-only TCN can outperform the electrical–optical estimator when the test distribution is already well supported. Terminal voltage and current contain strong SOC information in this regime, so additional FBG observations can be partly redundant. This result is therefore not contradictory to the proposed sensing strategy; it clarifies where the auxiliary modality is actually useful.",
+        "The blocked-interpolation experiment shows that an electrical-only TCN can outperform the electrical–optical estimator when the test distribution is already well supported. Terminal voltage and current contain strong SOC information in this regime, so additional FBG observations can be partly redundant. This does not contradict the proposed sensing strategy; it clarifies where the auxiliary modality is actually useful. High-accuracy SOC estimation has already been demonstrated on the same sensing platform, including a reported RMSE of 0.635% SOC [5]. Conventional interpolation accuracy is therefore not treated as the primary novelty here, and direct leaderboard comparison is avoided because the evaluation protocols are not identical. The present contribution instead centers on optical representation choice, compound operating-condition shift, electrical-OOD-dependent complementarity, and calibrated uncertainty.",
+    ),
+    (
         "The present study focuses on operating-condition transfer within a fixed dual-FBG sensing configuration. The conclusions therefore apply most directly when sensor installation and calibration remain consistent while discharge rate and driving profile change.",
-        "The primary quantitative dataset in this study contains one physical cell instrumented with a fixed dual-FBG sensing configuration. The conclusions therefore apply most directly to operating-condition transfer in which sensor installation and calibration remain consistent while discharge rate and driving profile change.",
+        "The primary quantitative dataset in this study contains one physical cell instrumented with a fixed dual-FBG sensing configuration. The conclusions apply most directly to operating-condition transfer in which sensor installation and calibration remain consistent while discharge rate and driving profile change.",
     ),
 ]
 for old, new in sec46_patches:
@@ -86,16 +93,25 @@ for old, new in sec46_patches:
         raise SystemExit(f"Expected Section 4–6 patch target not found: {old}")
     sec46_main = sec46_main.replace(old, new, 1)
 
+back_matter = """# Data availability
+
+The SiC-18 dataset analyzed in this study is publicly available through Mendeley Data (DOI: 10.17632/ft6rtwt8vm.1), as reported with the source study [5].
+
+# Code availability
+
+The analysis code, frozen experimental workflows, source-data tables, and reproducible figure-generation pipeline used in this study are maintained at https://github.com/Ustinian1722/FiberopticSOC. The submission branch preserves the numerical provenance of the results reported in the manuscript.
+""".strip()
+
 manuscript = "\n\n".join([
     front_main,
     sec23_main,
     sec46_main,
+    back_matter,
     "# Figure captions",
     captions_main,
     references_main,
 ]) + "\n"
 
-# Canonical quantitative claims that must remain synchronized with frozen evidence.
 required = [
     "0.482%", "0.593%", "0.999614",
     "2.151%", "1.632%", "48.52%",
@@ -107,7 +123,6 @@ missing = [x for x in required if x not in manuscript]
 if missing:
     raise SystemExit(f"Missing canonical manuscript claims: {missing}")
 
-# Claims explicitly excluded from the submission narrative.
 banned = [
     "first FBG-based SOC",
     "outperforms all baselines under all conditions",
@@ -120,17 +135,16 @@ found = [x for x in banned if x.lower() in manuscript.lower()]
 if found:
     raise SystemExit(f"Banned/obsolete claims found: {found}")
 
-# Basic structure contract.
 for heading in [
     "# Representation-aware dual-FBG optical sensing for robust battery state-of-charge estimation under operating-condition shifts",
     "# 1. Introduction", "# 2. Dataset and electrical–optical signal analysis",
     "# 3. Methodology", "# 4. Experiments and results",
-    "# 5. Discussion", "# 6. Conclusion", "# Figure captions", "# References",
+    "# 5. Discussion", "# 6. Conclusion", "# Data availability", "# Code availability",
+    "# Figure captions", "# References",
 ]:
     if heading not in manuscript:
         raise SystemExit(f"Missing section heading: {heading}")
 
-# Reviewer-risk safeguards.
 for phrase in [
     "one physical cell instrumented with a fixed dual-FBG",
     "no formal 95% coverage guarantee",
@@ -138,6 +152,8 @@ for phrase in [
     "TCNs [9]",
     "split conformal prediction [10,11]",
     "SiC-18 dataset previously reported",
+    "0.635% SOC [5]",
+    "10.17632/ft6rtwt8vm.1",
 ]:
     if phrase not in manuscript:
         raise SystemExit(f"Reviewer-risk safeguard missing: {phrase}")
@@ -145,12 +161,10 @@ for phrase in [
 if "English manuscript V1" in manuscript or "Drafting note:" in manuscript:
     raise SystemExit("Internal drafting metadata leaked into assembled manuscript")
 
-# Only intended artwork placeholders are allowed.
 placeholder_lines = [line for line in manuscript.splitlines() if "placeholder" in line.lower()]
 if any(("Fig. 1" not in line and "Fig. 3" not in line and "final artwork" not in line.lower()) for line in placeholder_lines):
     raise SystemExit(f"Unexpected placeholder text: {placeholder_lines}")
 
-# Abstract length contract: keep the submission abstract compact.
 abstract_match = re.search(r"## Abstract\n\n(.*?)\n\n## Keywords", manuscript, re.S)
 if abstract_match is None:
     raise SystemExit("Abstract section not found")
@@ -172,6 +186,7 @@ report = [
     "- banned/obsolete claim check: **PASS**",
     "- reviewer-risk safeguards: **PASS**",
     "- clean front matter / no drafting metadata: **PASS**",
+    "- data/code availability sections: **PASS**",
     "- section/reference structure check: **PASS**",
     "- intended artwork placeholders only: **PASS**",
     "",
