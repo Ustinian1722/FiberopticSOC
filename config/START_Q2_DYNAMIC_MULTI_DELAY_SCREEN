@@ -1,0 +1,14 @@
+release=true
+purpose=timepro_inspired_dynamic_multi_delay_residual_tcn
+selection_data=1C_source_only_same_rate_LOPO
+models=IUW-TCN,DMD-ResTCN
+seed=42
+epochs=20
+window=64
+train_stride=4
+validation_stride=1
+electrical_RF=13
+optical_scales_RF=13,29,57
+selector=sample_adaptive_softmax
+two_c_metrics_allowed_for_selection=false
+final_candidate_in_current_topconf_extension=true
