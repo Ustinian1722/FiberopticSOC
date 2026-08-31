@@ -1,0 +1,7 @@
+release=true
+source=zenodo_15388590
+archive=validation.zip
+expected_md5=1566c4f4df6550dfecd30c9d6e003bab
+purpose=structure_and_channel_audit_only
+architecture_selection_allowed=false
+preferred_external_sensor_rule=S5_across_cells
