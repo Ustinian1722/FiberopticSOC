@@ -1,0 +1,21 @@
+{
+  "frozen_model": "IUW-TCN",
+  "optical_representation": "raw_W1_W2",
+  "feature_mode": "raw_w",
+  "predictors": ["Voltage_V", "Current_A", "Wavelength_1", "Wavelength_2"],
+  "delta_t_candidate": "causal_log1p_delta_t",
+  "delta_t_decision": "DROP",
+  "delta_t_decision_protocol": "source-only-12fold-matched-dt-v1",
+  "delta_t_development_seed": 42,
+  "delta_t_source_validation_folds": 12,
+  "delta_t_MAE_wins": 1,
+  "mean_delta_MAE_dt_minus_no_dt": 0.0022050665575079165,
+  "median_delta_MAE_dt_minus_no_dt": 0.0019448983948677,
+  "mean_delta_Q95_AE_dt_minus_no_dt": 0.0042640560617048994,
+  "rate_summary": {
+    "1C": {"mean_delta_MAE": 0.0016248999551559168, "wins": 1, "mean_delta_Q95_AE": 0.002867463044822166},
+    "2C": {"mean_delta_MAE": 0.0027852331598599163, "wins": 0, "mean_delta_Q95_AE": 0.005660649078587633}
+  },
+  "opposite_rate_target_metrics_used_for_delta_t_decision": false,
+  "formal_T4_started": false
+}
