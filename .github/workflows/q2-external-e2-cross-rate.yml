@@ -1,0 +1,146 @@
+name: Q2 external E2 same-cell cross-rate FBG SOC
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/eo-gated-mamba-paper]
+    paths:
+      - "config/START_Q2_EXTERNAL_E2"
+
+concurrency:
+  group: q2-external-e2-cross-rate
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  OMP_NUM_THREADS: 2
+  MKL_NUM_THREADS: 2
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install preparation dependencies
+        run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2
+      - name: Verify frozen external design
+        run: |
+          python - <<'PY'
+          import json, pandas as pd
+          freeze=json.load(open('config/q2_external_soc_reconstruction_freeze.json'))
+          seg=pd.read_csv('config/external_e1_frozen_segments.csv')
+          assert freeze['status']=='FROZEN_EXTERNAL_LABEL_RECONSTRUCTION_V2'
+          assert freeze['eligible_validation_discharges']==52
+          assert len(seg)==52
+          assert set(seg.cell)=={'A1','A2','P1','P2'}
+          assert set(seg.assigned_rate_C)=={0.2,0.5,1.0}
+          assert freeze['absolute_s5_mainline'] is False
+          assert freeze['external_target_eligible_for_SiC_model_selection'] is False
+          print('frozen external E2 design verified')
+          PY
+      - name: Download official validation archive
+        run: |
+          mkdir -p external/raw external/extracted/validation
+          curl -L --fail --retry 8 --retry-all-errors --connect-timeout 30 \
+            'https://zenodo.org/records/15388590/files/validation.zip?download=1' \
+            -o external/raw/validation.zip
+          echo '1566c4f4df6550dfecd30c9d6e003bab  external/raw/validation.zip' | md5sum -c -
+          unzip -q external/raw/validation.zip -d external/extracted/validation
+      - name: Build frozen compact external dataset
+        run: |
+          python -m py_compile analysis/build_external_e1_dataset.py analysis/run_external_e1_cross_cell.py analysis/run_external_e2_cross_rate.py analysis/aggregate_external_e2_cross_rate.py
+          python analysis/build_external_e1_dataset.py \
+            --validation-csv external/extracted/validation/validation_constant_current_cycling.csv \
+            --segments config/external_e1_frozen_segments.csv \
+            --freeze config/q2_external_soc_reconstruction_freeze.json \
+            --out-dir results/external_e2_dataset
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-external-e2-dataset
+          path: results/external_e2_dataset/**
+          retention-days: 30
+
+  fold:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        cell: [A1, A2, P1, P2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install modeling dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - uses: actions/download-artifact@v4
+        with:
+          name: q2-external-e2-dataset
+          path: prepared
+      - name: Forward and integrity smoke
+        run: |
+          PYTHONPATH=analysis python - <<'PY'
+          import pandas as pd, torch
+          from run_external_e1_cross_cell import ExternalTCN
+          meta=pd.read_csv('prepared/external_e1_segment_metadata.csv')
+          assert len(meta)==52
+          assert set(meta.rate_C)=={0.2,0.5,1.0}
+          for d in (2,3):
+              y=ExternalTCN(d)(torch.randn(2,64,d))
+              assert y.shape==(2,)
+          print('external E2 smoke OK')
+          PY
+      - name: Run same-cell cross-rate fold
+        run: |
+          PYTHONPATH=analysis python analysis/run_external_e2_cross_rate.py \
+            --dataset prepared/external_e1_dataset.npz \
+            --metadata prepared/external_e1_segment_metadata.csv \
+            --cell ${{ matrix.cell }} \
+            --out-dir results/external_e2_${{ matrix.cell }} \
+            --window 64 --train-stride 4 --test-stride 1 \
+            --epochs 20 --batch-size 256 --seed 42
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-external-e2-${{ matrix.cell }}
+          path: results/external_e2_${{ matrix.cell }}/**
+          retention-days: 30
+
+  aggregate:
+    needs: fold
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: q2-external-e2-*
+          path: artifacts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install aggregation dependencies
+        run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2
+      - name: Aggregate pre-registered E2 evidence
+        run: |
+          python analysis/aggregate_external_e2_cross_rate.py \
+            --root artifacts \
+            --out-dir results/external_e2_summary
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-external-e2-summary
+          path: results/external_e2_summary/**
+          retention-days: 30
