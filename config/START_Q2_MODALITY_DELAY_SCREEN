@@ -1,0 +1,13 @@
+release=true
+purpose=timepro_inspired_modality_delay_tcn
+selection_data=1C_source_only_same_rate_LOPO
+models=IUW-TCN,MD-ResTCN
+seed=42
+epochs=20
+window=64
+train_stride=4
+validation_stride=1
+electrical_receptive_field=13
+optical_receptive_field=57
+two_c_metrics_allowed_for_selection=false
+no_additional_model_candidates=true
