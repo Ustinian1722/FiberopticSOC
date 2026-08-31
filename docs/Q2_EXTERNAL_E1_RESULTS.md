@@ -71,6 +71,16 @@ This result does **not** invalidate FBG sensing for SOC. It rejects a narrower t
 
 The frozen external dataset diagnostics already showed strong cell x C-rate interaction in S5rel, including different response signs/shapes across cells and rates. E1 confirms that removing only the additive Bragg zero point is insufficient to make that response universally transferable.
 
+This is consistent with the source publication's own sensor-physics findings (Hebenbrock et al., *Electrochimica Acta*, 2025, DOI `10.1016/j.electacta.2025.146975`):
+
+- A1/A2 form an aged adhesive set that underwent about 5.5 additional months of testing relative to pristine P1/P2;
+- the degradation of strain transfer is different for individual fixed FBG sensors;
+- A2/S5 is reported as showing critically advanced debonding and non-temperature-correlated irregularities;
+- validation analysis requires sensor-specific scaling/update of calibration constants as adhesive strain transfer changes;
+- debonding of one fixed sensor can alter the strain distribution seen by neighboring sensors.
+
+Therefore an additive zero-point correction alone cannot be expected to remove sensor-specific sensitivity, adhesive-state and strain-transfer differences. The E1 failure is an engineering boundary of uncalibrated surface-FBG interchangeability rather than evidence that optical sensing contains no SOC-related information.
+
 No target-informed sign flip, scale correction, cell-type calibration, sensor-position search, or architecture rescue is permitted after this result.
 
 ## Consequence for E2
