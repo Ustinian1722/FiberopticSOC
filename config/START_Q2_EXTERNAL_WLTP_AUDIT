@@ -1,4 +1,6 @@
 release=true
+revision=2
+execution_fix_only=q_ref_key
 purpose=external_E3_WLTP_structure_audit
 cells=P1,P2
 source=official_validation_zip
