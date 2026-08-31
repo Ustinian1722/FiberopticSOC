@@ -1,0 +1,48 @@
+name: Q2 external FBG strain calibration audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/eo-gated-mamba-paper]
+    paths:
+      - "config/START_Q2_EXTERNAL_CALIBRATION_AUDIT"
+
+concurrency:
+  group: q2-external-calibration-audit
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install audit dependencies
+        run: python -m pip install --disable-pip-version-check pandas==2.3.2 openpyxl==3.1.5 xlrd==2.0.2
+      - name: Download official strain calibration archive
+        run: |
+          mkdir -p external/raw external/extracted
+          curl -L --fail --retry 8 --retry-all-errors --connect-timeout 30 \
+            'https://zenodo.org/records/15388590/files/Referenceless_Strain_calibrations.zip?download=1' \
+            -o external/raw/Referenceless_Strain_calibrations.zip
+          echo 'cad69880d6015c91226ed69844508a65  external/raw/Referenceless_Strain_calibrations.zip' | md5sum -c -
+          unzip -q external/raw/Referenceless_Strain_calibrations.zip -d external/extracted/strain_calibration
+          du -sh external/raw/Referenceless_Strain_calibrations.zip external/extracted/strain_calibration
+      - name: Audit archive structure and headers
+        run: |
+          python analysis/audit_external_fbg_validation.py \
+            --root external/extracted/strain_calibration \
+            --out-dir results/external_strain_calibration_audit
+          find external/extracted/strain_calibration -maxdepth 5 -type f -printf '%p\t%s bytes\n' | sort > results/external_strain_calibration_audit/archive_tree.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-external-fbg-strain-calibration-audit
+          path: results/external_strain_calibration_audit/**
+          retention-days: 30
