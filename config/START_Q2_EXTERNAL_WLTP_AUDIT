@@ -1,6 +1,6 @@
 release=true
-revision=2
-execution_fix_only=q_ref_key
+revision=3
+execution_fix_only=segment_by_timestamp_gaps_exclude_charge_blocks
 purpose=external_E3_WLTP_structure_audit
 cells=P1,P2
 source=official_validation_zip
@@ -8,5 +8,6 @@ wltp_file=validation_WLTP_cycling.csv
 soc_reference=frozen_initial_0p04C_Qref
 use_real_timestamps=true
 integrate_signed_current=true
+block_gap_s=300
 modeling_allowed=false
 SiC_model_selection_reopened=false
