@@ -1,0 +1,11 @@
+{
+  "release": true,
+  "protocol": "training-side-cqr-v1",
+  "frozen_model": "IUW-TCN",
+  "feature_mode": "raw_w",
+  "candidate": "CQR",
+  "baseline": "residual_split_conformal",
+  "development_seed": 42,
+  "formal_T1_test_allowed": false,
+  "T4_target_allowed": false
+}
