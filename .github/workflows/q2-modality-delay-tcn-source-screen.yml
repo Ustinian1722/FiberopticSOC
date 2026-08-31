@@ -1,0 +1,96 @@
+name: Q2 modality-delay TCN source-only screen
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/eo-gated-mamba-paper]
+    paths:
+      - "config/START_Q2_MODALITY_DELAY_SCREEN"
+
+concurrency:
+  group: q2-modality-delay-tcn-source-screen
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        profile: [HWFET, LA92, NEDC, NYCC, US06, WLTC]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage and verify SiC-18 archive
+        run: |
+          mkdir -p data/extracted/SiC-18
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  SiC-18.zip" | sha256sum -c -
+          unzip -q SiC-18.zip -d data/extracted/SiC-18
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Integrity and forward smoke
+        run: |
+          python -m py_compile analysis/run_q2_modality_delay_tcn_source_screen.py analysis/aggregate_q2_modality_delay_tcn_source_screen.py
+          PYTHONPATH=analysis python - <<'PY'
+          import torch
+          from run_q2_modality_delay_tcn_source_screen import MODEL_ORDER, build_model
+          x = torch.randn(2, 64, 6)
+          for name in MODEL_ORDER:
+              m = build_model(name)
+              with torch.no_grad():
+                  pred, aux = m(x)
+              assert pred.shape == (2,), (name, pred.shape)
+              assert aux is None
+              print(name, sum(p.numel() for p in m.parameters() if p.requires_grad))
+          PY
+      - name: Run source-only fold
+        run: |
+          PYTHONPATH=analysis python analysis/run_q2_modality_delay_tcn_source_screen.py \
+            --data data/extracted/SiC-18 \
+            --out-dir results/q2_modality_delay_${{ matrix.profile }} \
+            --held-out-profile ${{ matrix.profile }} \
+            --epochs 20 --window 64 --train-stride 4 --val-stride 1 \
+            --batch-size 256 --seed 42
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-modality-delay-${{ matrix.profile }}
+          path: results/q2_modality_delay_${{ matrix.profile }}/**
+          retention-days: 30
+
+  aggregate:
+    needs: profile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: q2-modality-delay-*
+          path: results/q2_modality_delay_downloads
+          merge-multiple: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --disable-pip-version-check pandas==2.3.2
+      - name: Aggregate and apply preregistered gate
+        run: |
+          PYTHONPATH=analysis python analysis/aggregate_q2_modality_delay_tcn_source_screen.py \
+            --input-dir results/q2_modality_delay_downloads \
+            --out-dir results/q2_modality_delay_summary
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-modality-delay-tcn-source-summary
+          path: results/q2_modality_delay_summary/**
+          retention-days: 30
