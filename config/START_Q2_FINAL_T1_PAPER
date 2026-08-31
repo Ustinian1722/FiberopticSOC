@@ -1,0 +1,13 @@
+release=true
+purpose=final_paper_T1_baseline_and_residual_conformal
+models=CNN,GRU,LSTM,Transformer,VI-TCN,VI+TF-TCN,RA-FBG-TCN
+seed=42
+window=64
+train_stride=2
+eval_stride=1
+max_epochs=50
+patience=7
+source_only_normalization=true
+calibration_reserved_for_uq=true
+no_new_model_search=true
+external_negative_results_do_not_reopen_design=true
