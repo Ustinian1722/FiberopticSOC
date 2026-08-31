@@ -5,6 +5,7 @@ on:
   push:
     branches: [research/eo-gated-mamba-paper]
     paths:
+      - "config/START_Q2_CROSSFORMER_SCREEN"
       - ".github/workflows/q2-final-crossformer-screen.yml"
 
 permissions:
