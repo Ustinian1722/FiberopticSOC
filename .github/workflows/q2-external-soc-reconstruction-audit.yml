@@ -1,0 +1,54 @@
+name: Q2 external FBG SOC reconstruction audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/eo-gated-mamba-paper]
+    paths:
+      - "config/START_Q2_EXTERNAL_SOC_RECONSTRUCTION"
+
+concurrency:
+  group: q2-external-soc-reconstruction-audit
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2
+      - name: Download and verify official archives
+        run: |
+          mkdir -p external/raw external/extracted/cal external/extracted/validation
+          curl -L --fail --retry 8 --retry-all-errors --connect-timeout 30 \
+            'https://zenodo.org/records/15388590/files/Referenceless_Strain_calibrations.zip?download=1' \
+            -o external/raw/Referenceless_Strain_calibrations.zip
+          echo 'cad69880d6015c91226ed69844508a65  external/raw/Referenceless_Strain_calibrations.zip' | md5sum -c -
+          curl -L --fail --retry 8 --retry-all-errors --connect-timeout 30 \
+            'https://zenodo.org/records/15388590/files/validation.zip?download=1' \
+            -o external/raw/validation.zip
+          echo '1566c4f4df6550dfecd30c9d6e003bab  external/raw/validation.zip' | md5sum -c -
+          unzip -q external/raw/Referenceless_Strain_calibrations.zip -d external/extracted/cal
+          unzip -q external/raw/validation.zip -d external/extracted/validation
+      - name: Reconstruct capacity reference and validation coverage
+        run: |
+          python -m py_compile analysis/deep_audit_external_soc_capacity.py
+          python analysis/deep_audit_external_soc_capacity.py \
+            --initial-calibration external/extracted/cal/Initial_referenceless_strain_calibration.csv \
+            --constant-current-validation external/extracted/validation/validation_constant_current_cycling.csv \
+            --out-dir results/external_soc_reconstruction \
+            --chunksize 200000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-external-soc-reconstruction-audit
+          path: results/external_soc_reconstruction/**
+          retention-days: 30
