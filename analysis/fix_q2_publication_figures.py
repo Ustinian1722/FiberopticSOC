@@ -61,7 +61,6 @@ def fix_fig2(data, source_dir: Path, out_dir: Path) -> None:
     plain_log_colorbar(cb2)
 
     bars = []
-    labels = []
     conditions = []
     positions = [0.0, 0.36, 1.0, 1.36]
     for rate in RATES:
@@ -70,7 +69,6 @@ def fix_fig2(data, source_dir: Path, out_dir: Path) -> None:
         rho_tf = float(d[["temperature_℃", "force_N"]].corr().iloc[0, 1])
         bars.extend([abs(rho_w), abs(rho_tf)])
         conditions.extend([corr_condition(rho_w), corr_condition(rho_tf)])
-    # Reorder as W-1C, W-2C, TF-1C, TF-2C for direct reading without a legend.
     values = [bars[0], bars[2], bars[1], bars[3]]
     kappas = [conditions[0], conditions[2], conditions[1], conditions[3]]
     labels = ["Raw W\n1C", "Raw W\n2C", "T/F\n1C", "T/F\n2C"]
@@ -122,19 +120,16 @@ def fix_fig5(data, source_dir: Path, out_dir: Path) -> None:
     gs = fig.add_gridspec(1, 3, wspace=0.42, width_ratios=[1.25, 1.0, 1.0])
     ax_a, ax_b, ax_c = [fig.add_subplot(gs[0, i]) for i in range(3)]
 
-    ax_a.axhspan(lo, hi, color=COLORS["light"], alpha=0.55, label="1C training support")
-    ax_a.plot(t, current, color=COLORS["blue"], lw=0.75, label="NEDC 2C test")
+    ax_a.axhspan(lo, hi, color=COLORS["light"], alpha=0.55)
+    ax_a.plot(t, current, color=COLORS["blue"], lw=0.75)
     mask = (current < lo) | (current > hi)
     ax_a.fill_between(
         t, current, np.where(current < lo, lo, hi), where=mask,
-        color=COLORS["red"], alpha=0.25, interpolate=False, label="Outside support",
+        color=COLORS["red"], alpha=0.25, interpolate=False,
     )
     ax_a.set_xlabel("Time (min)")
     ax_a.set_ylabel("Current (A)")
-    ax_a.legend(
-        loc="upper right", fontsize=6.2, frameon=True, facecolor="white",
-        edgecolor="none", framealpha=0.92,
-    )
+    ax_a.set_title("NEDC 2C test current", fontsize=8, pad=4)
     style_ax(ax_a)
 
     x = np.arange(len(bins))
@@ -143,7 +138,10 @@ def fix_fig5(data, source_dir: Path, out_dir: Path) -> None:
     ax_b.bar(x + w / 2, bins["viw_mae"] * 100, width=w, color=COLORS["blue"], label="VI+W")
     ax_b.set_xticks(x, ["ID", "0–25", "25–50", "50–75", "75–100"])
     for tick in ax_b.get_xticklabels():
-        tick.set_rotation(50); tick.set_ha("right"); tick.set_rotation_mode("anchor"); tick.set_fontsize(6.3)
+        tick.set_rotation(50)
+        tick.set_ha("right")
+        tick.set_rotation_mode("anchor")
+        tick.set_fontsize(6.3)
     ax_b.set_xlabel("Electrical OOD fraction (%)")
     ax_b.set_ylabel("MAE (% SOC)")
     ax_b.legend(loc="upper left")
@@ -156,7 +154,10 @@ def fix_fig5(data, source_dir: Path, out_dir: Path) -> None:
     ax_c.fill_between(x, 0, gains, where=gains < 0, color=COLORS["red"], alpha=0.10)
     ax_c.set_xticks(x, ["ID", "0–25", "25–50", "50–75", "75–100"])
     for tick in ax_c.get_xticklabels():
-        tick.set_rotation(50); tick.set_ha("right"); tick.set_rotation_mode("anchor"); tick.set_fontsize(6.3)
+        tick.set_rotation(50)
+        tick.set_ha("right")
+        tick.set_rotation_mode("anchor")
+        tick.set_fontsize(6.3)
     ax_c.set_xlabel("Electrical OOD fraction (%)")
     ax_c.set_ylabel("Relative optical gain (%)")
     ax_c.set_ylim(min(-24, float(gains.min()) - 4), max(54, float(gains.max()) + 4))
@@ -188,7 +189,10 @@ def fix_fig6(source_dir: Path, out_dir: Path) -> None:
         )
         ax.set_xticks(x, d["held_out_profile"])
         for tick in ax.get_xticklabels():
-            tick.set_rotation(55); tick.set_ha("right"); tick.set_rotation_mode("anchor"); tick.set_fontsize(6.0)
+            tick.set_rotation(55)
+            tick.set_ha("right")
+            tick.set_rotation_mode("anchor")
+            tick.set_fontsize(6.0)
         ax.set_ylabel("MAE (% SOC)")
         ax.set_title(title, fontsize=8, pad=4)
         style_ax(ax)
@@ -204,7 +208,8 @@ def fix_fig6(source_dir: Path, out_dir: Path) -> None:
         ax_c.plot([low, high], [yi, yi], color=color, lw=1.4)
         ax_c.plot(val, yi, "o", color=color, ms=5)
     ax_c.set_yticks(y, labels)
-    ax_c.set_xlabel("MAE (% SOC), cluster bootstrap 95% CI")
+    ax_c.set_title("Seed-cluster bootstrap 95% CI", fontsize=8, pad=4)
+    ax_c.set_xlabel("MAE (% SOC)")
     ax_c.set_ylim(-0.6, len(y) - 0.4)
     style_ax(ax_c)
 
@@ -232,10 +237,14 @@ def fix_fig7(source_dir: Path, pred: pd.DataFrame, out_dir: Path) -> None:
         ("2C_to_1C", COLORS["blue"], "2C → 1C"),
     ]:
         q = noise[noise["direction"] == direction].sort_values("sigma_pm_each_wavelength")
-        ax_a.plot(q["sigma_pm_each_wavelength"], q["MAE_mean"] * 100,
-                  marker="o", ms=4.2, lw=1.2, color=color, label=label)
-        ax_b.plot(q["sigma_pm_each_wavelength"], q["Q95_AE_mean"] * 100,
-                  marker="o", ms=4.2, lw=1.2, color=color, label=label)
+        ax_a.plot(
+            q["sigma_pm_each_wavelength"], q["MAE_mean"] * 100,
+            marker="o", ms=4.2, lw=1.2, color=color, label=label,
+        )
+        ax_b.plot(
+            q["sigma_pm_each_wavelength"], q["Q95_AE_mean"] * 100,
+            marker="o", ms=4.2, lw=1.2, color=color, label=label,
+        )
     for ax, ylabel in [(ax_a, "MAE (% SOC)"), (ax_b, "Q95 absolute error (% SOC)")]:
         ax.set_xlabel("Wavelength noise σ (pm/channel)")
         ax.set_xticks([0, 0.5, 1, 2])
@@ -244,23 +253,24 @@ def fix_fig7(source_dir: Path, pred: pd.DataFrame, out_dir: Path) -> None:
         style_ax(ax)
 
     x = d["sample"].to_numpy()
-    ax_c.fill_between(x, d["lower"].to_numpy() * 100, d["upper"].to_numpy() * 100,
-                      color=COLORS["blue2"], alpha=0.18, label="95% interval")
-    ax_c.plot(x, d["y_true"].to_numpy() * 100, color=COLORS["dark"], lw=1.1, label="Reference")
-    ax_c.plot(x, d["y_pred"].to_numpy() * 100, color=COLORS["blue"], lw=0.9, label="Prediction")
+    ax_c.fill_between(
+        x, d["lower"].to_numpy() * 100, d["upper"].to_numpy() * 100,
+        color=COLORS["blue2"], alpha=0.18,
+    )
+    ax_c.plot(x, d["y_true"].to_numpy() * 100, color=COLORS["dark"], lw=1.1)
+    ax_c.plot(x, d["y_pred"].to_numpy() * 100, color=COLORS["blue"], lw=0.9, ls="--")
     u95 = uq.loc[np.isclose(uq["nominal_coverage"], 0.95)].iloc[0]
     ax_c.set_title(
-        f"95% nominal: PICP {u95['PICP'] * 100:.2f}%, MPIW {u95['MPIW'] * 100:.3f}% SOC",
+        f"95% interval: PICP {u95['PICP'] * 100:.2f}%, MPIW {u95['MPIW'] * 100:.3f}%",
         fontsize=7, pad=5,
     )
     ax_c.set_xlabel("Window index")
     ax_c.set_ylabel("SOC (%)")
-    ax_c.legend(loc="best")
     style_ax(ax_c)
 
     add_panel_label(ax_a, "a")
     add_panel_label(ax_b, "b")
-    add_panel_label(ax_c, "c", x=-0.08, y=1.08, x_offset_pt=0, y_offset_pt=0)
+    add_panel_label(ax_c, "c")
     fig.suptitle("FBG noise robustness and calibrated uncertainty", fontsize=9.5, y=1.01)
     save_figure(fig, out_dir, "fig7_noise_and_uncertainty")
 
