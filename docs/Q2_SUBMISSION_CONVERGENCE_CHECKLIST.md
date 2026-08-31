@@ -1,13 +1,13 @@
 # Q2 submission convergence checklist
 
-Status: **NO NEW NUMERICAL EXPERIMENTS — MANUSCRIPT PRODUCTION ONLY**
+Status: **NO NEW NUMERICAL EXPERIMENTS — FINAL MANUSCRIPT PRODUCTION ONLY**
 
-The research phase is closed. Remaining work is limited to two schematic visuals, bibliography integration, English manuscript production and journal formatting.
+The research phase is closed. The quantitative figures, tables, numerical claims, English manuscript V1, and core bibliography shortlist are now assembled. Remaining work is limited to two schematic visuals, citation-manager integration, editorial polishing, and journal formatting.
 
 ## A. Main figures
 
 - [x] Fig. 1 quantitative electrical/optical panels generated from SiC-18.
-- [ ] Fig. 1(a) experimental setup / dual-FBG sensing visual: replace placeholder after the user provides/assembles the platform image.
+- [ ] Fig. 1(a) experimental setup / dual-FBG sensing visual: replace placeholder after the platform image is assembled.
 - [x] Fig. 2 representation analysis finalized with reproducible Pearson correlation + frozen transfer summary.
 - [ ] Fig. 3 RA-FBG-TCN + residual conformal framework artwork: placeholder only.
 - [x] Fig. 4 conventional SOC prediction/error display generated from fixed T1.
@@ -16,44 +16,59 @@ The research phase is closed. Remaining work is limited to two schematic visuals
 - [x] Fig. 7 wavelength-noise + 95% UQ display generated from frozen results.
 - [x] Final quantitative-figure QA: zero <5-pt PDF text and 0 collision FAIL / 0 WARN on all six rendered data figures.
 
-Canonical quantitative package: `docs/Q2_FINAL_FIGURE_FREEZE.md`.
+Canonical quantitative package: `docs/Q2_FINAL_FIGURE_FREEZE.md` and artifact `q2-publication-figures-final` from workflow run `33368316998`.
 
 ## B. Tables
 
-- [x] Table 1 dataset/test-condition table drafted and ready for manuscript formatting.
-- [x] Table 2 model/training-configuration table drafted and ready for manuscript formatting.
+- [x] Table 1 dataset/test-condition table drafted in English.
+- [x] Table 2 model/training-configuration table drafted in English.
 - [x] Table 3 conventional model comparison frozen in `paper/source_data/table3_model_comparison.csv`.
-- [x] Table 4 representation + parameter-matched cross-rate complementarity drafted.
-- [x] Table 5 strict T4 summary drafted.
+- [x] Table 4 representation + parameter-matched electrical-OOD complementarity drafted in English.
+- [x] Table 5 strict T4 summary drafted in English.
 - [x] Table 6 omitted by default; noise/UQ numbers remain in Fig. 7.
-
-Source: `docs/Q2_MAIN_TABLES_READY_CN.md`.
 
 ## C. Manuscript content
 
-- [x] Front matter Chinese V1.
-- [x] Section 1 Introduction revised to evidence-aligned Chinese V2.
-- [x] Section 2 dataset/signal analysis revised to frozen Fig. 1/2 evidence.
-- [x] Section 3 methodology code-aligned Chinese V1.
-- [x] Section 4 experiments/results revised to frozen Fig. 4–7 / Table 3–5 evidence.
-- [x] Section 5 discussion revised to final representation/OOD claims.
-- [x] Conclusion Chinese V1.
-- [x] Figure/table numbering and callout map frozen.
-- [x] Numeric claim source-of-truth audit completed: `docs/Q2_NUMERIC_CLAIM_AUDIT.md`.
-- [x] Recent seven-paper Introduction shortlist metadata/DOIs verified: `docs/Q2_VERIFIED_RECENT_REFERENCES.md`.
-- [ ] Import/format the full bibliography through the final reference manager and add classic mechanism/filtering/TCN references.
-- [ ] English translation and journal-style polishing.
-- [ ] Final terminology pass: SOC, FBG, native/raw wavelength, T/F decoupling, operating-condition shift, conformal prediction.
+- [x] Title, Abstract, Keywords, Highlights — English V1.
+- [x] Section 1 Introduction — English V1.
+- [x] Section 2 Dataset and electrical–optical signal analysis — English V1.
+- [x] Section 3 Methodology — English V1, code aligned.
+- [x] Section 4 Experiments and results — English V1.
+- [x] Section 5 Discussion — English V1.
+- [x] Section 6 Conclusion — English V1.
+- [x] English Fig. 1–7 captions drafted.
+- [x] Full English manuscript assembly completed and linted by workflow run `33372238989`.
+- [x] Approximate assembled length: **8,018 words including tables and captions**.
+- [x] 16/16 canonical numerical claims present in the assembled manuscript.
+- [x] Banned/obsolete claim check PASS.
+- [x] Section-structure and intended-placeholder checks PASS.
+- [x] Numeric claim source-of-truth audit: `docs/Q2_NUMERIC_CLAIM_AUDIT.md`.
 
-## D. Claims to keep in the main paper
+Canonical English sources:
+- `docs/Q2_ENGLISH_FRONT_INTRO_V1.md`
+- `docs/Q2_ENGLISH_SECTIONS2_3_V1.md`
+- `docs/Q2_ENGLISH_SECTIONS4_6_V1.md`
+- `docs/Q2_MAIN_FIGURE_CAPTIONS_EN.md`
 
-1. Raw dual-FBG wavelength coordinates are a strong transfer-oriented predictive representation for the retained compact causal estimator.
+Assembly artifact: `q2-english-manuscript-v1`.
+
+## D. References
+
+- [x] Seven recent battery/FBG/SOC/UQ references metadata checked.
+- [x] Canonical SOC, FBG, TCN, LSTM, Transformer, AdamW and conformal references shortlisted in `docs/Q2_REFERENCE_SHORTLIST_VERIFIED.md`.
+- [ ] Import the shortlist plus the original SiC-18 data paper into the final reference manager.
+- [ ] Regenerate citation numbers in journal style.
+- [ ] Add dataset/Zenodo citation if required by the target journal.
+
+## E. Claims retained in the main paper
+
+1. Native dual-FBG wavelength coordinates are a strong transfer-oriented predictive representation for the retained compact causal estimator.
 2. Optical information is condition dependent: it is not universally necessary in well-supported electrical regions, but its relative benefit increases as electrical measurements move outside the training support.
 3. The frozen estimator retains useful accuracy under simultaneous C-rate and unseen-profile shift, with clear directional asymmetry.
 4. Direct wavelength noise up to 2 pm causes smooth rather than catastrophic degradation.
 5. A 95% residual conformal interval achieves approximately nominal coverage (PICP 95.04%) with MPIW about 2.075% SOC.
 
-## E. Material not promoted in the main narrative
+## F. Material not promoted in the main narrative
 
 Keep internal/supplementary unless reviewers request it:
 - Mamba/CrossFormer/ModernTCN/multi-delay architecture-development history;
@@ -66,14 +81,14 @@ Keep internal/supplementary unless reviewers request it:
 
 These records remain in the repository for provenance but do not need to occupy the main manuscript.
 
-## F. Remaining production sequence
+## G. Remaining production sequence
 
-1. Draw/insert Fig. 1(a) experimental setup panel.
-2. Draw Fig. 3 framework using the already frozen architecture contract.
-3. Build the English manuscript from the Chinese evidence-aligned sections.
-4. Import final bibliography and resolve all citation numbers.
-5. Journal-specific template/layout pass and final proofread.
+1. Draw/insert Fig. 1(a) experimental setup / dual-FBG sensing panel.
+2. Draw Fig. 3 RA-FBG-TCN + residual-conformal framework using the frozen architecture contract.
+3. Perform one English editorial pass: shorten long sentences, remove repeated claims, standardize terms and abbreviations.
+4. Import final bibliography and resolve citation numbering.
+5. Apply target-journal template/layout and run final proofread.
 
-## G. Stop rule
+## H. Stop rule
 
-Do not start a new backbone, feature transformation, UQ method, external-data rescue calibration, or target-guided tuning during normal manuscript preparation. Only reopen experiments for a concrete reviewer request or a demonstrated factual inconsistency in the frozen evidence.
+Do not start a new backbone, feature transformation, UQ method, external-data rescue calibration, or target-guided tuning during manuscript preparation. Only reopen experiments for a concrete reviewer request or a demonstrated factual inconsistency in the frozen evidence.
