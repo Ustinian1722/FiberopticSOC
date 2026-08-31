@@ -1,0 +1,62 @@
+name: EO-Gated-Mamba development screen
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/eo-gated-mamba-paper]
+    paths:
+      - "config/START_EO_GATED_MAMBA_SCREEN"
+
+permissions:
+  contents: read
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage and verify SiC-18 archive
+        run: |
+          mkdir -p data/extracted/SiC-18
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  SiC-18.zip" | sha256sum -c -
+          unzip -q SiC-18.zip -d data/extracted/SiC-18
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Syntax and forward smoke
+        run: |
+          python -m py_compile analysis/run_eo_gated_mamba_screen.py
+          PYTHONPATH=analysis python - <<'PY'
+          import torch
+          from run_eo_gated_mamba_screen import MODEL_ORDER, build_model
+          x = torch.randn(3, 64, 6)
+          for name in MODEL_ORDER:
+              model = build_model(name)
+              with torch.no_grad():
+                  pred, gate = model(x)
+              assert pred.shape == (3,), (name, pred.shape)
+              if name.startswith("EO-Gated"):
+                  assert gate is not None and gate.shape == (3,), (name, None if gate is None else gate.shape)
+              print(name, sum(p.numel() for p in model.parameters() if p.requires_grad))
+          PY
+      - name: Run equal-budget architecture and representation screen
+        run: |
+          PYTHONPATH=analysis python analysis/run_eo_gated_mamba_screen.py \
+            --data data/extracted/SiC-18 \
+            --out-dir results/eo_gated_mamba_screen \
+            --epochs 15 --window 64 --train-stride 4 --test-stride 1 \
+            --batch-size 256 --seed 42
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eo-gated-mamba-screen
+          path: results/eo_gated_mamba_screen/**
+          retention-days: 30
