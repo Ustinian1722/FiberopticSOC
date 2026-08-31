@@ -1,0 +1,4 @@
+representation,mae_fraction,mae_pct,params,role
+Raw W,0.013847,1.3847,11545,retained representation
+Decoupled T/F,0.020328,2.0328,11545,physical-coordinate comparison
+ETMF-T/F,0.015692,1.5692,24434,complex-fusion comparison
