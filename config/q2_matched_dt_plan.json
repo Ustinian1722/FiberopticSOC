@@ -1,0 +1,9 @@
+{
+  "release": true,
+  "frozen_model": "IUW-TCN",
+  "protocol": "source-only-12fold-matched-dt-v1",
+  "development_seed": 42,
+  "feature_candidate": "causal_log1p_delta_t",
+  "decision_rule": "KEEP only if mean MAE delta<0, median MAE delta<0, wins>=8/12, mean MAE delta<0 in both source rates, and mean Q95-AE delta<=0; otherwise DROP",
+  "opposite_rate_target_metrics_allowed": false
+}
