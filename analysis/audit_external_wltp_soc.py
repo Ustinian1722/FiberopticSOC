@@ -25,8 +25,6 @@ def summarize_cell(df: pd.DataFrame, cell: str, q_ref: float) -> tuple[dict, pd.
 
     i2, u2, s2 = i[idx], u[idx], s5[idx]
     t2 = t.iloc[idx].reset_index(drop=True)
-    dt = t2.diff().dt.total_seconds().to_numpy(float)
-    good_dt = np.isfinite(dt) & (dt > 0) & (dt <= 30.0)
 
     active = np.abs(i2) > CURRENT_THRESHOLD_A
     active_idx = np.flatnonzero(active)
@@ -146,7 +144,7 @@ def main() -> None:
     args = p.parse_args()
 
     freeze = json.loads(args.freeze.read_text(encoding="utf-8"))
-    qmap = freeze["reference_capacities_Ah"]
+    qmap = freeze["q_ref_Ah"]
     usecols = [TIME_COL]
     for c in CELLS:
         usecols += [f"I_{c} / A", f"U_{c} / V", f"{c}S5 / nm"]
