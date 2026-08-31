@@ -8,6 +8,10 @@ on:
       - "config/START_Q2_CROSSFORMER_SCREEN"
       - ".github/workflows/q2-final-crossformer-screen.yml"
 
+concurrency:
+  group: q2-final-eo-crossformer-screen
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
