@@ -1,0 +1,38 @@
+{
+  "frozen_model": "IUW-TCN",
+  "feature_mode": "raw_w",
+  "candidate": "CQR",
+  "baseline": "residual_split_conformal",
+  "decision": "DROP",
+  "selected_uq_method": "residual_split_conformal",
+  "selection_protocol": "training-side-cqr-v1",
+  "implementation_revision": "sparse-whole-segment-v2",
+  "development_seed": 42,
+  "source_workflow_run_id": 33345936436,
+  "source_artifact_id": 9741998246,
+  "criteria": {
+    "picp90_at_least_0_87": true,
+    "picp95_at_least_0_92": true,
+    "mis_no_worse_than_residual_conformal_at_both_levels": false,
+    "average_relative_mis_improvement_at_least_2pct": false,
+    "width_not_more_than_10pct_wider": true
+  },
+  "average_relative_MIS_improvement": -0.013017648399091988,
+  "max_CQR_to_baseline_width_ratio": 0.8524292003514841,
+  "selection_metrics": {
+    "alpha_0_10": {
+      "CQR": {"PICP": 0.9155718285591212, "MPIW": 0.031320054156273675, "mean_interval_score": 0.03882168357036069, "qhat": 0.004562877118587494},
+      "residual_split_conformal": {"PICP": 0.9782468231746716, "MPIW": 0.036742117871325156, "mean_interval_score": 0.037936046661782206, "qhat": 0.018702402710914612}
+    },
+    "alpha_0_05": {
+      "CQR": {"PICP": 0.9484169717854836, "MPIW": 0.03758253334296718, "mean_interval_score": 0.04582427965203108, "qhat": -0.0018001645803451538},
+      "residual_split_conformal": {"PICP": 0.9958001292267931, "MPIW": 0.045384938382342435, "mean_interval_score": 0.045701353419784735, "qhat": 0.023188233375549316}
+    }
+  },
+  "training_side_windows": {"fit": 4511, "validation": 6909, "calibration": 4233, "selection": 9286},
+  "formal_T1_validation_used_for_decision": false,
+  "formal_T1_calibration_used_for_decision": false,
+  "formal_T1_test_used_for_decision": false,
+  "T4_target_used_for_decision": false,
+  "formal_test_CQR_may_reverse_decision": false
+}
