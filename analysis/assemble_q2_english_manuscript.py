@@ -15,6 +15,9 @@ references = (DOCS / "Q2_REFERENCES_EN_CORE.md").read_text(encoding="utf-8")
 
 # Internal recent-reference key remains a drafting resource and is not placed mid-manuscript.
 front_main = front.split("## Recent-reference key used in this draft", 1)[0].rstrip()
+# Remove internal drafting title and turn the actual paper title into the document heading.
+front_main = re.sub(r"^# English manuscript V1 — Front matter and Introduction\s*", "", front_main)
+front_main = re.sub(r"^## Title\s*\n\n\*\*(.*?)\*\*", r"# \1", front_main, count=1, flags=re.S)
 
 # Replace the longer drafting abstract with the final 250-word submission abstract.
 abstract_body = abstract_final.split("\n", 2)[-1].strip()
@@ -30,6 +33,8 @@ sec23_main = re.sub(r"^# English manuscript V1 — Sections 2–3\s*", "", sec23
 sec46_main = re.sub(r"^# English manuscript V2 — Sections 4–6\s*", "", sec46).strip()
 captions_main = captions.split("\n", 1)[1].strip()
 references_main = references.strip()
+# Remove repository-only bibliography drafting note from the assembled manuscript.
+references_main = re.sub(r"\n> Drafting note:.*$", "", references_main, flags=re.S).rstrip()
 
 # Reviewer-risk editorial patches. These alter wording/citations only, never numerical evidence.
 front_patches = [
@@ -48,6 +53,10 @@ for old, new in front_patches:
     front_main = front_main.replace(old, new, 1)
 
 sec23_patches = [
+    (
+        "This study uses the publicly available SiC-18 dataset collected from a SiOx/C pouch-type lithium-ion cell instrumented with two embedded fiber Bragg grating (FBG) sensors.",
+        "This study uses the publicly available SiC-18 dataset previously reported for an instrumented SiOx/C pouch-type lithium-ion cell [5]. The cell contains two embedded fiber Bragg grating (FBG) sensors.",
+    ),
     (
         "A representation-aware dual-FBG temporal convolutional network, denoted RA-FBG-TCN, is developed for SOC estimation under dynamic loads and changing operating conditions.",
         "A representation-aware dual-FBG temporal convolutional network, denoted RA-FBG-TCN, is developed for SOC estimation under dynamic loads and changing operating conditions. The temporal backbone follows the causal/dilated convolutional sequence-modeling principle established for TCNs [9].",
@@ -113,6 +122,7 @@ if found:
 
 # Basic structure contract.
 for heading in [
+    "# Representation-aware dual-FBG optical sensing for robust battery state-of-charge estimation under operating-condition shifts",
     "# 1. Introduction", "# 2. Dataset and electrical–optical signal analysis",
     "# 3. Methodology", "# 4. Experiments and results",
     "# 5. Discussion", "# 6. Conclusion", "# Figure captions", "# References",
@@ -127,9 +137,13 @@ for phrase in [
     "[8] and data-driven methods",
     "TCNs [9]",
     "split conformal prediction [10,11]",
+    "SiC-18 dataset previously reported",
 ]:
     if phrase not in manuscript:
         raise SystemExit(f"Reviewer-risk safeguard missing: {phrase}")
+
+if "English manuscript V1" in manuscript or "Drafting note:" in manuscript:
+    raise SystemExit("Internal drafting metadata leaked into assembled manuscript")
 
 # Only intended artwork placeholders are allowed.
 placeholder_lines = [line for line in manuscript.splitlines() if "placeholder" in line.lower()]
@@ -157,6 +171,7 @@ report = [
     f"- required canonical numerical claims: **{len(required)}/{len(required)} present**",
     "- banned/obsolete claim check: **PASS**",
     "- reviewer-risk safeguards: **PASS**",
+    "- clean front matter / no drafting metadata: **PASS**",
     "- section/reference structure check: **PASS**",
     "- intended artwork placeholders only: **PASS**",
     "",
