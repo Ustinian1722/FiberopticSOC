@@ -15,11 +15,10 @@ references = (DOCS / "Q2_REFERENCES_EN_CORE.md").read_text(encoding="utf-8")
 
 # Internal recent-reference key remains a drafting resource and is not placed mid-manuscript.
 front_main = front.split("## Recent-reference key used in this draft", 1)[0].rstrip()
-# Remove internal drafting title and turn the actual paper title into the document heading.
 front_main = re.sub(r"^# English manuscript V1 — Front matter and Introduction\s*", "", front_main)
 front_main = re.sub(r"^## Title\s*\n\n\*\*(.*?)\*\*", r"# \1", front_main, count=1, flags=re.S)
 
-# Replace the longer drafting abstract with the final 250-word submission abstract.
+# Replace the drafting abstract with the final submission abstract.
 abstract_body = abstract_final.split("\n", 2)[-1].strip()
 front_main = re.sub(
     r"## Abstract\n\n.*?\n\n## Keywords",
@@ -35,7 +34,7 @@ captions_main = captions.split("\n", 1)[1].strip()
 references_main = references.strip()
 references_main = re.sub(r"\n> Drafting note:.*$", "", references_main, flags=re.S).rstrip()
 
-# Reviewer-risk editorial patches. These alter wording/citations only, never numerical evidence.
+# Reviewer-risk editorial patches retained for the older Section 1/2/3 source fragments.
 front_patches = [
     (
         "Existing SOC estimation approaches can broadly be divided into model-based observer/filtering methods and data-driven methods that learn nonlinear mappings from measured signals to SOC.",
@@ -68,30 +67,15 @@ sec23_patches = [
         "A point estimate alone does not communicate prediction reliability. To obtain an uncertainty interval without introducing an additional probabilistic neural network, residual split conformal prediction is applied after the point estimator has been trained and frozen.",
         "A point estimate alone does not communicate prediction reliability. To obtain an uncertainty interval without introducing an additional probabilistic neural network, residual split conformal prediction [10,11] is applied after the point estimator has been trained and frozen.",
     ),
+    (
+        "Figure 2(d) and Table 4 report the main results.",
+        "Figure 2(d) reports the development-stage representation results.",
+    ),
 ]
 for old, new in sec23_patches:
     if old not in sec23_main:
         raise SystemExit(f"Expected Section 2/3 patch target not found: {old}")
     sec23_main = sec23_main.replace(old, new, 1)
-
-sec46_patches = [
-    (
-        "Figure 7(c) illustrates the point estimate and calibrated interval over a representative test segment. These results show that a simple post-hoc conformal layer can supplement the deterministic point estimator with an uncertainty interval whose empirical coverage is aligned with the nominal level, without requiring a second probabilistic neural network.",
-        "Figure 7(c) illustrates the point estimate and calibrated interval over a representative test segment. These empirical coverage results pertain to the blocked mixed-condition calibration/test regime; no formal 95% coverage guarantee is claimed here for arbitrary cross-rate or unseen-profile distribution shift. The result nevertheless shows that a simple post-hoc conformal layer can supplement the deterministic point estimator with an uncertainty interval whose empirical coverage is aligned with the nominal level, without requiring a second probabilistic neural network.",
-    ),
-    (
-        "The blocked-interpolation experiment shows that an electrical-only TCN can outperform the electrical–optical estimator when the test distribution is already well supported. Terminal voltage and current contain strong SOC information in this regime, so additional FBG observations can be partly redundant. This result is therefore not contradictory to the proposed sensing strategy; it clarifies where the auxiliary modality is actually useful.",
-        "The blocked-interpolation experiment shows that an electrical-only TCN can outperform the electrical–optical estimator when the test distribution is already well supported. Terminal voltage and current contain strong SOC information in this regime, so additional FBG observations can be partly redundant. This does not contradict the proposed sensing strategy; it clarifies where the auxiliary modality is actually useful. High-accuracy SOC estimation has already been demonstrated on the same sensing platform, including a reported RMSE of 0.635% SOC [5]. Conventional interpolation accuracy is therefore not treated as the primary novelty here, and direct leaderboard comparison is avoided because the evaluation protocols are not identical. The present contribution instead centers on optical representation choice, compound operating-condition shift, electrical-OOD-dependent complementarity, and calibrated uncertainty.",
-    ),
-    (
-        "The present study focuses on operating-condition transfer within a fixed dual-FBG sensing configuration. The conclusions therefore apply most directly when sensor installation and calibration remain consistent while discharge rate and driving profile change.",
-        "The primary quantitative dataset in this study contains one physical cell instrumented with a fixed dual-FBG sensing configuration. The conclusions apply most directly to operating-condition transfer in which sensor installation and calibration remain consistent while discharge rate and driving profile change.",
-    ),
-]
-for old, new in sec46_patches:
-    if old not in sec46_main:
-        raise SystemExit(f"Expected Section 4–6 patch target not found: {old}")
-    sec46_main = sec46_main.replace(old, new, 1)
 
 back_matter = """# Data availability
 
@@ -113,10 +97,19 @@ manuscript = "\n\n".join([
 ]) + "\n"
 
 required = [
+    # conventional benchmark
     "0.482%", "0.593%", "0.999614",
+    # new strict backbone benchmark
+    "0.864%", "1.163%", "0.565%",
+    # new formal input ablation
+    "2.162%", "1.795%", "1.770%", "0.464%",
+    # OOD diagnostic retained as mechanism analysis
     "2.151%", "1.632%", "48.52%",
-    "1.795%", "0.806%", "1.301%",
-    "0.961–1.677%", "95.04%", "2.075%",
+    # final five-seed T4
+    "0.806%", "1.301%", "0.961–1.677%",
+    # uncertainty
+    "95.04%", "2.075%",
+    # representation statistics
     "0.738", "0.655", "0.982", "0.985",
 ]
 missing = [x for x in required if x not in manuscript]
@@ -130,6 +123,7 @@ banned = [
     "untouched independent holdout",
     "condition number of 107",
     "condition number of 119",
+    "native W1/W2 universally outperform",
 ]
 found = [x for x in banned if x.lower() in manuscript.lower()]
 if found:
@@ -154,6 +148,8 @@ for phrase in [
     "SiC-18 dataset previously reported",
     "0.635% SOC [5]",
     "10.17632/ft6rtwt8vm.1",
+    "ranks third rather than first",
+    "statistically comparable",
 ]:
     if phrase not in manuscript:
         raise SystemExit(f"Reviewer-risk safeguard missing: {phrase}")
