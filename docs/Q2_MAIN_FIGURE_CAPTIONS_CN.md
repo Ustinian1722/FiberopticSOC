@@ -1,6 +1,6 @@
 # Q2 主图图注草稿（中文 V1）
 
-> 图注与 `docs/Q2_FIGURE_TABLE_PRODUCTION_SPEC.md` 及 `analysis/make_q2_publication_figures.py` 对齐。框架类 panel 当前保持 PLACEHOLDER，数据 panel 可直接进入排版。
+> 图注与 `docs/Q2_FIGURE_TABLE_PRODUCTION_SPEC.md` 及最终 figure pipeline 对齐。框架类 panel 当前保持 PLACEHOLDER，数据 panel 可直接进入排版。
 
 ## Fig. 1 数据集与电学–光学同步响应
 
@@ -8,7 +8,7 @@
 
 ## Fig. 2 双 FBG 表示分析
 
-**Fig. 2. 双 FBG 原始波长与热–力解耦坐标的表示特性及迁移性能。** (a) 全部 12 条动态轨迹中 W1–W2 的联合分布；(b) 对应的解耦 temperature–force 联合分布；(c) 1C 和 2C 数据中两组坐标的绝对 Pearson 相关性，并给出由二变量相关矩阵得到的近似 condition number；(d) 在相同跨倍率 development protocol 下 raw W、decoupled T/F 与较复杂 ETMF-T/F 表示的平均 SOC MAE。结果表明，T/F 提供更直接的物理语义，但其高相关性并未转化为更稳定的预测迁移优势；后续主模型因此采用原始 W1/W2 作为光学输入。
+**Fig. 2. 双 FBG 原始波长与热–力解耦坐标的表示特性及迁移性能。** (a) 全部 12 条动态轨迹中 W1–W2 的联合分布；(b) 对应的解耦 temperature–force 联合分布；(c) 1C 和 2C 数据中两组坐标的绝对 Pearson 相关性；(d) 在相同跨倍率 development protocol 下 raw W、decoupled T/F 与较复杂 ETMF-T/F 表示的平均 SOC MAE。结果表明，T/F 提供更直接的物理语义且两个解耦变量呈现更强线性相关，但这一坐标变化并未转化为更稳定的预测迁移优势；后续主模型因此采用原始 W1/W2 作为光学输入。
 
 ## Fig. 3 RA-FBG-TCN 方法框架
 
