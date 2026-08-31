@@ -1,39 +1,40 @@
 # Q2 main-paper figure/table production specification
 
-Status: **FROZEN PRODUCTION PLAN**
+Status: **QUANTITATIVE FIGURES FROZEN; SCHEMATICS PLACEHOLDER**
 
-The goal is a conventional Energy/JES-style visual package: approximately 7 main figures and 5–6 main tables. Avoid development-history figures.
+The visual package follows a conventional Energy/JES-style structure with seven numbered main figures and five default main tables. Development-history figures are excluded from the main manuscript.
 
 ## Fig. 1 — Dataset, sensing arrangement and representative electrical–optical signals
 
-Recommended composition:
-
-- (a) sensing/test schematic or a clean redraw of the implanted dual-FBG battery setup (use original source citation; do not copy copyrighted figure directly without permission);
-- (b) representative 1C dynamic trajectory: SOC + current/voltage;
+Composition:
+- (a) sensing/test schematic or platform image — **PLACEHOLDER** until the experimental visual is supplied/assembled;
+- (b) representative NEDC 1C current + SOC trajectory;
 - (c) synchronized W1/W2 trajectory;
-- (d) optional 2C comparison for the same profile.
+- (d) 1C/2C W2–SOC comparison for the same profile.
 
-Message: electrical and optical channels are synchronized but respond differently to dynamic load.
+Message: electrical and optical channels are synchronized but exhibit distinct dynamic responses.
 
 ## Fig. 2 — Dual-FBG representation analysis
 
-Recommended 2×2 panel:
+Final 2×2 composition:
+- (a) W1–W2 density;
+- (b) T–F density;
+- (c) absolute Pearson correlation by representation and rate;
+- (d) matched cross-rate development MAE comparison.
 
-- (a) W1–W2 density/scatter;
-- (b) T–F density/scatter;
-- (c) correlation comparison for raw W and decoupled T/F;
-- (d) covariance condition number / matched transfer MAE comparison.
+Final reproducible descriptive correlation values:
+- raw W1/W2: |r| = 0.738 at 1C and 0.655 at 2C;
+- decoupled T/F: |r| = 0.982 at 1C and 0.985 at 2C.
 
-Annotate approximate condition numbers:
-- W: ~6–7;
-- T/F: ~107–119.
+Do **not** annotate the old development-stage covariance-condition-number approximations in the main figure. The main claim does not require them.
 
-Message: physical decoupling improves semantic interpretability but produces a more correlated/ill-conditioned predictive coordinate; raw W yields stronger matched transfer for the retained TCN.
+Message: physical decoupling improves semantic interpretability but creates a more strongly linearly coupled coordinate in this dataset; native W yields stronger matched predictive transfer for the retained TCN.
 
 ## Fig. 3 — RA-FBG-TCN framework
 
-One clean methodology schematic:
+**PLACEHOLDER** until framework artwork is drawn.
 
+Fixed content contract:
 V/I/W1/W2
 → train-only normalization
 → 64-sample causal window
@@ -46,45 +47,46 @@ V/I/W1/W2
 → SOC point estimate
 → 95% residual conformal interval.
 
-Use a small inset for each TCN block: causal conv k=3 → GroupNorm → GELU → causal conv k=3 → GroupNorm → residual + GELU.
-
-Message: compact causal estimation plus post-hoc calibrated UQ.
+TCN block inset: causal conv k=3 → GroupNorm → GELU → causal conv k=3 → GroupNorm → residual + GELU.
 
 ## Fig. 4 — Conventional SOC prediction examples
 
-Do not make a model-zoo figure. Use RA-FBG-TCN only.
+Use RA-FBG-TCN only; model comparison stays in Table 3.
 
-Recommended panels:
-- (a) representative SOC truth vs prediction for a smoother profile;
-- (b) representative truth vs prediction for a highly dynamic profile;
-- (c) absolute error over time or SOC;
+Panels:
+- (a) representative NEDC test trajectory;
+- (b) representative NYCC test trajectory;
+- (c) absolute error over the dynamic segment;
 - (d) overall absolute-error distribution.
 
-Table 3 already carries the model comparison.
-
-Message: RA-FBG-TCN has sub-percent conventional point-estimation accuracy.
+Message: the retained compact causal estimator provides sub-percent conventional point-estimation accuracy.
 
 ## Fig. 5 — Electrical-OOD severity versus optical benefit
 
-This is the most important explanatory figure.
+This is the main explanatory figure.
 
-Recommended panels:
-- (a) training-current support envelope and example 1C→2C test current showing OOD regions;
-- (b) bar/line: OOD bin versus VI MAE and VI+W MAE;
-- (c) OOD bin versus relative optical gain: -18.75%, +5.17%, +15.00%, +20.05%, +48.52%;
-- optional (d) scatter of window OOD fraction versus optical gain with a trend line.
+Final panels:
+- (a) 1C training-current support envelope with a representative 2C test current;
+- (b) OOD bin versus VI and VI+W MAE;
+- (c) OOD bin versus relative optical gain.
 
-Message: optical assistance is condition dependent and becomes valuable as electrical measurements move out of training support.
+Frozen gains:
+- ID: −18.75%;
+- OOD 0–25%: +5.17%;
+- OOD 25–50%: +15.00%;
+- OOD 50–75%: +20.05%;
+- OOD 75–100%: +48.52%.
+
+Message: optical assistance is condition dependent and becomes increasingly useful as electrical measurements leave source support.
 
 ## Fig. 6 — Strict T4 cross-rate unseen-profile generalization
 
-Recommended panels:
-- (a) profile-wise MAE for 1C→2C, mean across 5 seeds with error bars;
-- (b) profile-wise MAE for 2C→1C;
-- (c) direction-level MAE/RMSE summary or seed-cluster bootstrap CI;
-- optional (d) representative difficult/easy prediction trajectory only if space permits.
+Final panels:
+- (a) profile-wise 1C→2C MAE, five-seed mean±SD;
+- (b) profile-wise 2C→1C MAE, five-seed mean±SD;
+- (c) direction-level and overall seed-cluster bootstrap 95% CI.
 
-Headline annotations:
+Headline values:
 - 1C→2C MAE 1.795%;
 - 2C→1C MAE 0.806%;
 - overall MAE 1.301%, bootstrap 95% CI 0.961–1.677%.
@@ -93,100 +95,76 @@ Do not single out the worst seed in the main figure.
 
 ## Fig. 7 — Wavelength-noise robustness and calibrated uncertainty
 
-Recommended 1×2 or 2×2 composition:
-
+Final 1×3 composition:
 - (a) noise sigma 0/0.5/1/2 pm versus MAE for both directions;
-- (b) optional Q95-AE versus noise sigma;
-- (c) representative SOC truth/prediction with 95% conformal interval;
-- (d) optional coverage/interval-width annotation.
+- (b) Q95-AE versus wavelength-noise sigma;
+- (c) representative SOC truth/prediction with 95% conformal interval.
 
 Headline UQ annotation:
-- 95% nominal;
-- PICP 95.04%;
-- MPIW 2.075% SOC.
+- nominal coverage: 95%;
+- PICP: 95.04%;
+- MPIW: 2.075% SOC.
 
-Message: small direct wavelength perturbations cause smooth degradation; conformal calibration provides well-calibrated uncertainty bounds.
+Message: small direct wavelength perturbations cause smooth degradation and post-hoc conformal calibration provides approximately nominal uncertainty coverage.
 
 # Main tables
 
 ## Table 1 — Dataset and operating profiles
 
-Columns:
-- cell / capacity / sensing setup;
-- profile;
-- rate;
-- sample count or trajectory duration if useful.
-
-Keep simple.
+Use the compact version in `docs/Q2_MAIN_TABLES_READY_CN.md`.
 
 ## Table 2 — Model/training configuration
 
-Include:
-- inputs V/I/W1/W2;
-- window 64;
-- hidden 24;
-- TCN dilations 1/2/4;
-- kernel 3;
-- optimizer AdamW;
-- train-only normalization;
-- parameter count 11,545.
+Include V/I/W1/W2, window 64, hidden 24, dilations 1/2/4, kernel 3, AdamW, train-only normalization and 11,545 parameters.
 
 ## Table 3 — Conventional model comparison
 
-Use frozen T1 table:
-- CNN, GRU, LSTM, Transformer, VI-TCN, VI+TF-TCN, RA-FBG-TCN;
-- Params, MAE, RMSE, R2, Q95-AE.
+Frozen candidates:
+CNN, GRU, LSTM, Transformer, VI-TCN, VI+TF-TCN and RA-FBG-TCN.
 
-Do not visually mark RA-FBG-TCN as statistically best when it is not; bold best metric entries normally.
+Bold only the actual best metric entries; do not visually force the proposed model to appear best.
 
 ## Table 4 — Optical representation / OOD complementarity
 
-Preferred compact format rather than a large architecture zoo:
+Compact two-part table:
+- Part A: raw W TCN, decoupled T/F TCN, ETMF-TF;
+- Part B: parameter-matched VI versus VI+W aggregate for 1C→2C and 2C→1C.
 
-Part A: representation screen
-- VI+W TCN;
-- VI+TF TCN;
-- optional ETMF-TF.
-
-Part B or adjacent text: cross-rate VI vs VI+W aggregate.
-
-If Fig. 5 fully covers the OOD bins, do not duplicate all bin values in Table 4.
+Do not duplicate all OOD-bin values already displayed in Fig. 5.
 
 ## Table 5 — Strict T4 summary
 
-Rows:
-- 1C→2C;
-- 2C→1C;
-- overall if meaningful.
+Rows: 1C→2C and 2C→1C; overall seed-cluster MAE/CI can be a table footnote.
 
-Columns:
-- MAE, RMSE, R2, Q95-AE, optional CI.
+## Table 6 — omitted by default
 
-## Table 6 — Reliability summary (optional)
+Noise/UQ reliability numbers remain in Fig. 7 and Section 4.5 unless journal formatting later requires a dedicated table.
 
-Keep only if journal space allows:
-- 2 pm noise relative MAE increase;
-- 95% UQ: PICP, MPIW, MIS.
+# Supplementary/internal-only candidates
 
-Otherwise move these numbers into Fig. 7 annotations and omit Table 6.
-
-# Supplementary-only visual candidates
-
-- full representation/model development screen;
-- whitening/conditioning details;
-- delta-t/CQR negative ablations;
+- full representation/model development screens;
+- whitening diagnostics;
+- delta-t/CQR negative selection;
+- Mamba/CrossFormer/ModernTCN/multi-delay exploration;
 - external E1/E2 detail;
 - WLTP structure audit;
-- seed-by-seed full T4 matrix.
+- full seed-by-seed T4 matrix.
 
-# Visual style
+# Visual style and frozen QA
 
-- A4 two-column-compatible sizing;
-- Times New Roman or journal-equivalent serif for plots;
-- consistent line widths and marker sizes;
-- no 3D plots;
-- no decorative radar charts unless absolutely necessary;
-- figure labels `(a)`, `(b)`, ... in consistent upper-left positions;
-- use the same color/marker mapping for VI versus VI+W across all figures;
-- report SOC errors in `% SOC` consistently;
-- keep figure legends short and avoid model acronyms not used in the manuscript.
+- full-width target: 183 mm;
+- Times New Roman-style serif with publication-safe fallback;
+- editable SVG primary;
+- PDF vector secondary;
+- TIFF 600 dpi LZW submission raster;
+- PNG 300 dpi preview;
+- no 3D plots or radar charts;
+- consistent panel labels and VI/VI+W visual mapping;
+- SOC errors reported as `% SOC`.
+
+Canonical final figure package is generated by `.github/workflows/q2-publication-figures.yml` and must pass:
+- no PDF text below 5 pt;
+- collision audit: 0 FAIL and 0 WARN for every quantitative figure;
+- source-data/figure contract checks.
+
+Fig. 1(a) and Fig. 3 are the only intentionally unfinished main-display artwork.
