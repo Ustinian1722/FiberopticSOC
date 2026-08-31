@@ -1,0 +1,11 @@
+release=true
+purpose=topconf_inspired_tcn_extension
+selection_data=1C_source_only_same_rate_LOPO
+models=IUW-TCN,MC-TCN,LR-MC-TCN
+seed=42
+epochs=20
+window=64
+train_stride=4
+validation_stride=1
+two_c_metrics_allowed_for_selection=false
+no_additional_model_candidates=true
