@@ -1,6 +1,12 @@
 # Q2 publication figure production status
 
-Status: **DATA FIGURES IN PRODUCTION; SCHEMATICS DEFERRED**
+Status: **DATA FIGURES FROZEN; SCHEMATICS DEFERRED**
+
+Canonical QA-clean rendering:
+- GitHub Actions run: `33367693061`
+- head SHA: `2116e487f9c7ec5a9c1eca5fdd6e02ca54694a26`
+- artifact ID: `9748901023`
+- artifact label: `q2-publication-figures-v2`
 
 ## Production policy
 
@@ -16,21 +22,36 @@ The public `nature-figure` skill (`Yuan1z0825/nature-skills`) is used as the fig
 
 ### Intentional typography override
 
-The upstream skill defaults to Arial/Helvetica-like sans-serif fonts. This manuscript has already standardized plot typography to a Times New Roman-style serif. Therefore the renderer uses `Times New Roman` with `Times`, `Liberation Serif`, and `DejaVu Serif` fallbacks while keeping `svg.fonttype='none'` so all SVG text remains editable.
+The upstream skill defaults to Arial/Helvetica-like sans-serif fonts. This manuscript has standardized plot typography to a Times New Roman-style serif. The renderer therefore uses `Times New Roman` with `Times`, `Liberation Serif`, and `DejaVu Serif` fallbacks while keeping `svg.fonttype='none'` so SVG text remains editable.
 
-This is an intentional project-level style choice, not a failure to follow the remaining nature-figure contracts.
+This is an intentional project-level style choice; the remaining nature-figure contracts are retained.
+
+## Final data-figure QA
+
+All six rendered quantitative figures passed the final automated checks:
+
+| Figure | Minimum PDF text | Collision QA |
+|---|---:|---|
+| Fig. 1 | 7.0 pt | PASS, 0 fail / 0 warn |
+| Fig. 2 | 6.0 pt | PASS, 0 fail / 0 warn |
+| Fig. 4 | 7.0 pt | PASS, 0 fail / 0 warn |
+| Fig. 5 | 6.3 pt | PASS, 0 fail / 0 warn |
+| Fig. 6 | 6.0 pt | PASS, 0 fail / 0 warn |
+| Fig. 7 | 7.0 pt | PASS, 0 fail / 0 warn |
+
+The earlier Fig. 2 log-colorbar mathtext issue (<5 pt superscripts) and Fig. 5/6/7 layout-collision warnings were resolved without changing any numerical data or scientific claims.
 
 ## Main-figure status
 
 | Figure | Status | Production source | Main claim |
 |---|---|---|---|
-| Fig. 1 | **DATA PANELS READY; panel (a) PLACEHOLDER** | `SiC-18.zip` | Electrical and dual-FBG optical signals provide synchronized but distinct views during dynamic discharge. |
-| Fig. 2 | **READY PIPELINE** | all 12 SiC-18 trajectories + frozen representation summary | Raw wavelength and decoupled T/F are alternative coordinates; interpretability and predictive conditioning need not coincide. |
+| Fig. 1 | **FROZEN DATA PANELS; panel (a) PLACEHOLDER** | `SiC-18.zip` | Electrical and dual-FBG optical signals provide synchronized but distinct views during dynamic discharge. |
+| Fig. 2 | **FROZEN** | all 12 SiC-18 trajectories + frozen representation summary | Raw wavelength and decoupled T/F are alternative coordinates; interpretability and predictive conditioning need not coincide. |
 | Fig. 3 | **PLACEHOLDER** | methodology spec only | Compact causal TCN + residual conformal UQ. Framework artwork is intentionally deferred. |
-| Fig. 4 | **READY PIPELINE** | fixed blocked-T1 RA-FBG-TCN rerun | The retained estimator provides sub-percent conventional SOC accuracy. |
-| Fig. 5 | **READY PIPELINE / HERO EXPLANATORY FIGURE** | frozen parameter-matched VI vs VI+W OOD analysis | Optical benefit increases as electrical measurements leave source support. |
-| Fig. 6 | **READY PIPELINE** | frozen 5-seed T4 summary | Cross-rate unseen-profile generalization is strong but asymmetric. |
-| Fig. 7 | **READY PIPELINE** | frozen wavelength-noise results + 95% conformal T1 rerun | Wavelength perturbations cause smooth degradation and 95% conformal intervals are well calibrated. |
+| Fig. 4 | **FROZEN** | fixed blocked-T1 RA-FBG-TCN rerun | The retained estimator provides sub-percent conventional SOC accuracy. |
+| Fig. 5 | **FROZEN / HERO EXPLANATORY FIGURE** | frozen parameter-matched VI vs VI+W OOD analysis | Optical benefit increases as electrical measurements leave source support. |
+| Fig. 6 | **FROZEN** | frozen 5-seed T4 summary | Cross-rate unseen-profile generalization is strong but asymmetric. |
+| Fig. 7 | **FROZEN** | frozen wavelength-noise results + 95% conformal T1 rerun | Wavelength perturbations cause smooth degradation and 95% conformal intervals are well calibrated. |
 
 ## Figure-level source-data contracts
 
@@ -64,4 +85,8 @@ Fig. 1 and the raw geometry panels of Fig. 2 are regenerated directly from all o
 - Fig. 3 RA-FBG-TCN methodology framework;
 - graphical abstract.
 
-These are kept as layout placeholders until the data figures and manuscript dimensions are stable. This prevents framework artwork from driving the paper layout prematurely.
+These remain layout placeholders. They can be replaced later without changing the frozen quantitative panel numbering or Results narrative.
+
+## Freeze rule
+
+Do not revise the quantitative data figures for aesthetic experimentation alone. Reopen a frozen figure only for a demonstrated factual error, journal-specific formatting requirement, or concrete reviewer request.
