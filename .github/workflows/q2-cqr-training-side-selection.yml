@@ -1,0 +1,94 @@
+name: Q2 training-side CQR selection gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "config/q2_cqr_selection_plan.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fiberoptic-q2-cqr-selection
+  cancel-in-progress: false
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate frozen feature mode and CQR latch
+        shell: bash
+        run: |
+          test -f config/Q2_REPRESENTATION_FREEZE.md
+          test -f config/Q2_CQR_SELECTION_PROTOCOL.md
+          test -f config/q2_feature_freeze.json
+          test -f config/q2_cqr_selection_plan.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          feature = json.loads(Path("config/q2_feature_freeze.json").read_text())
+          plan = json.loads(Path("config/q2_cqr_selection_plan.json").read_text())
+          if feature.get("frozen_model") != "IUW-TCN":
+              raise SystemExit("CQR stage only permits frozen IUW-TCN")
+          mode = feature.get("feature_mode")
+          if mode not in {"raw_w", "raw_w_dt"}:
+              raise SystemExit(f"Invalid frozen feature_mode: {mode!r}")
+          dt_decision = feature.get("delta_t_decision")
+          if (mode == "raw_w" and dt_decision != "DROP") or (mode == "raw_w_dt" and dt_decision != "KEEP"):
+              raise SystemExit("feature_mode is inconsistent with frozen delta-t decision")
+          if plan.get("release") is not True:
+              raise SystemExit("CQR selection latch requires release=true")
+          if plan.get("protocol") != "training-side-cqr-v1":
+              raise SystemExit("Unexpected CQR selection protocol")
+          if plan.get("frozen_model") != "IUW-TCN" or plan.get("feature_mode") != mode:
+              raise SystemExit("CQR latch does not match frozen model/feature mode")
+          if plan.get("formal_T1_test_allowed") is not False:
+              raise SystemExit("Formal T1 test must remain forbidden during CQR selection")
+          Path("feature_mode.txt").write_text(mode)
+          PY
+      - name: Verify and extract SiC-18
+        run: |
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  SiC-18.zip" | sha256sum -c -
+          mkdir -p data/extracted/SiC-18
+          unzip -q SiC-18.zip -d data/extracted/SiC-18
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scipy==1.17.1 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Run training-side CQR selection
+        shell: bash
+        run: |
+          MODE="$(cat feature_mode.txt)"
+          python analysis/run_q2_cqr_training_side_selection.py \
+            --data data/extracted/SiC-18 \
+            --out-dir results/q2_cqr_training_side_selection \
+            --feature-mode "$MODE" \
+            --seed 42 --window 64 --train-stride 2 --eval-stride 1 \
+            --batch-size 256 --max-epochs 50 --min-epochs 10 --patience 7 \
+            --min-delta 0.00005 --lr 0.001
+      - name: Publish decision
+        shell: bash
+        run: |
+          echo "## Q2 training-side CQR KEEP/DROP decision" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          cat results/q2_cqr_training_side_selection/cqr_decision.csv >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          cat results/q2_cqr_training_side_selection/selection_interval_metrics.csv >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-cqr-training-side-selection
+          path: results/q2_cqr_training_side_selection/**
+          retention-days: 60
