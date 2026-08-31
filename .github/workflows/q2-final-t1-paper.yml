@@ -1,0 +1,110 @@
+name: Q2 final T1 paper benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/eo-gated-mamba-paper]
+    paths:
+      - "config/START_Q2_FINAL_T1_PAPER"
+
+concurrency:
+  group: q2-final-t1-paper
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  model:
+    strategy:
+      fail-fast: false
+      max-parallel: 7
+      matrix:
+        model: [CNN, GRU, LSTM, Transformer, VI-TCN, VI+TF-TCN, RA-FBG-TCN]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage and verify SiC-18 archive
+        run: |
+          mkdir -p data/extracted/SiC-18
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  SiC-18.zip" | sha256sum -c -
+          unzip -q SiC-18.zip -d data/extracted/SiC-18
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Syntax and forward smoke
+        run: |
+          python -m py_compile analysis/run_q2_final_t1_paper.py
+          PYTHONPATH=analysis python - <<'PY'
+          import torch
+          from run_q2_final_t1_paper import factory
+          name='${{ matrix.model }}'
+          m=factory(name,64)
+          x=torch.randn(2,64,6)
+          with torch.no_grad(): y,_=m(x)
+          assert y.shape==(2,), (name,y.shape)
+          print(name, sum(p.numel() for p in m.parameters() if p.requires_grad))
+          PY
+      - name: Run final T1 model
+        run: |
+          PYTHONPATH=analysis python analysis/run_q2_final_t1_paper.py \
+            --data data/extracted/SiC-18 \
+            --out-dir "results/final_t1/${{ matrix.model }}" \
+            --model "${{ matrix.model }}" --seed 42 \
+            --window 64 --train-stride 2 --eval-stride 1 \
+            --batch-size 256 --max-epochs 50 --min-epochs 10 \
+            --patience 7 --min-delta 0.00005
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-final-t1-${{ matrix.model }}
+          path: results/final_t1/${{ matrix.model }}/**
+          retention-days: 30
+
+  aggregate:
+    needs: model
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: q2-final-t1-*
+          path: downloaded
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --disable-pip-version-check pandas==2.3.2
+      - name: Build publication tables
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd, shutil
+          root=Path('downloaded'); out=Path('paper_summary'); out.mkdir()
+          files=list(root.rglob('point_metrics.csv'))
+          if len(files)!=7: raise RuntimeError(f'Expected 7 point metric files, got {len(files)}')
+          d=pd.concat([pd.read_csv(f) for f in files],ignore_index=True).sort_values('MAE')
+          d.to_csv(out/'table_t1_model_comparison.csv',index=False)
+          uq=list(root.rglob('uq_summary.csv'))
+          if len(uq)!=1: raise RuntimeError(f'Expected one UQ summary, got {len(uq)}')
+          shutil.copy2(uq[0],out/'table_t1_conformal_uq.csv')
+          intervals=list(root.rglob('test_intervals.csv'))
+          # copy only the RA-FBG-TCN UQ interval output if found
+          uq_intervals=[p for p in intervals if 'RA-FBG-TCN' in str(p)]
+          if uq_intervals: shutil.copy2(uq_intervals[0],out/'ra_fbg_tcn_test_intervals.csv')
+          print('\n=== T1 model comparison ===')
+          print(d[['model','params','best_epoch','MAE','RMSE','R2','Q95_AE','MaxAE']].to_string(index=False))
+          print('\n=== Residual conformal UQ ===')
+          print(pd.read_csv(uq[0]).to_string(index=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-final-t1-paper-summary
+          path: paper_summary/**
+          retention-days: 30
