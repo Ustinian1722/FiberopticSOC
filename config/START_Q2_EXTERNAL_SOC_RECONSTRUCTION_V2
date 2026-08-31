@@ -1,0 +1,10 @@
+release=true
+revision=protocol-filter-v2
+source=zenodo_15388590
+calibration_reference=exactly_three_long_0.4A_discharges
+validation_rates=0.2C,0.5C,1C
+validation_expected_currents_A=2,5,10
+exclude_extra_1A_cycles=true
+minimum_capacity_fraction_of_Qref=0.65
+minimum_S5_valid_fraction=0.95
+architecture_selection_allowed=false
