@@ -1,0 +1,20 @@
+{
+  "release": true,
+  "purpose": "paper-completion strict benchmark and matched input ablation only",
+  "protocol_doc": "docs/Q2_PAPER_COMPLETION_EXPERIMENT_PROTOCOL.md",
+  "epoch_plan": "config/q2_frozen_epoch_plan.csv",
+  "backbone_seed": 42,
+  "ablation_seeds": [0, 1, 2, 3, 4],
+  "directions": ["1C_to_2C", "2C_to_1C"],
+  "profiles": ["HWFET", "LA92", "NEDC", "NYCC", "US06", "WLTC"],
+  "models_backbone": ["CNN", "GRU", "LSTM", "Transformer", "CGA-Matched", "DualTCN-Transformer", "RA-FBG-TCN"],
+  "models_ablation": ["VI", "VI+TF", "VI+W"],
+  "window": 64,
+  "train_stride": 4,
+  "test_stride": 1,
+  "batch_size": 256,
+  "lr": 0.001,
+  "target_guided_tuning_allowed": false,
+  "new_model_search_allowed": false,
+  "stop_after_completion": true
+}
