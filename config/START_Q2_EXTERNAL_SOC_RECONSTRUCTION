@@ -1,0 +1,8 @@
+release=true
+source=zenodo_15388590
+initial_calibration_archive=Referenceless_Strain_calibrations.zip
+validation_archive=validation.zip
+capacity_reference=mean_of_three_full_initial_0.04C_discharges_per_cell
+soc_definition=1_minus_cumulative_discharge_Ah_over_Qref
+positive_current=discharge
+architecture_selection_allowed=false
