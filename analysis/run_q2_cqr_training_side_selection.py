@@ -237,9 +237,13 @@ def _parent_name(src: dict) -> str:
 def partition_t1_train_segments(train_segments: list[dict]) -> tuple[dict[str, list[dict]], pd.DataFrame]:
     """Split only formal T1-train segments into fit/val/cal/selection by whole segment.
 
-    Assignment is deterministic and label-free. Every trajectory keeps at least three
-    held-out training-side segments (validation/calibration/selection); all remaining
-    formal-train segments are fit data.
+    The frozen T1 block pattern yields only a small number of disjoint train segments per
+    physical trajectory (three for the current SiC-18 release). Therefore roles are
+    assigned across trajectories rather than requiring every parent trajectory to contain
+    all four roles. Assignment uses only deterministic parent ordering and within-parent
+    segment order; SOC labels, predictions, residuals and uncertainty statistics are never
+    consulted. A 5-slot phase-rotated pattern gives fit twice the weight of each held-out
+    role while spreading every role across both rates and all six drive profiles.
     """
     grouped: dict[str, list[dict]] = defaultdict(list)
     for seg in train_segments:
@@ -247,43 +251,45 @@ def partition_t1_train_segments(train_segments: list[dict]) -> tuple[dict[str, l
 
     buckets = {"fit": [], "validation": [], "calibration": [], "selection": []}
     audit_rows: list[dict] = []
+    role_pattern = ("fit", "validation", "fit", "calibration", "selection")
+
     for parent_idx, parent in enumerate(sorted(grouped)):
         segs = sorted(grouped[parent], key=lambda s: int(s.get("segment_start", 0)))
-        n = len(segs)
-        if n < 6:
-            raise RuntimeError(f"Need at least 6 formal T1-train segments for {parent}, got {n}")
-
-        # Three approximately separated positions, phase-shifted across trajectories.
-        phase = parent_idx % n
-        candidates = [((1 + phase) % n), ((3 + phase) % n), ((5 + phase) % n)]
-        chosen: list[int] = []
-        for c in candidates:
-            while c in chosen:
-                c = (c + 1) % n
-            chosen.append(c)
-        role_at = {
-            chosen[0]: "validation",
-            chosen[1]: "calibration",
-            chosen[2]: "selection",
-        }
+        if not segs:
+            raise RuntimeError(f"No formal T1-train segments for {parent}")
+        phase = (2 * parent_idx) % len(role_pattern)
 
         for seg_idx, seg in enumerate(segs):
-            role = role_at.get(seg_idx, "fit")
+            role = role_pattern[(seg_idx + phase) % len(role_pattern)]
             buckets[role].append(seg)
             audit_rows.append(
                 {
                     "parent_name": parent,
+                    "profile": str(seg["profile"]),
+                    "rate": str(seg["rate"]),
                     "segment_index_within_parent": seg_idx,
                     "segment_start": int(seg.get("segment_start", -1)),
                     "segment_stop": int(seg.get("segment_stop", -1)),
                     "role": role,
                     "assignment_used_labels": False,
+                    "assignment_pattern": "fit,val,fit,cal,selection_phase2parent",
                 }
             )
 
+    expected_rates = {"1C", "2C"}
+    expected_profiles = {"HWFET", "LA92", "NEDC", "NYCC", "US06", "WLTC"}
     for role, items in buckets.items():
         if not items:
             raise RuntimeError(f"No segments assigned to {role}")
+        rates = {str(s["rate"]) for s in items}
+        profiles = {str(s["profile"]) for s in items}
+        if rates != expected_rates:
+            raise RuntimeError(f"Training-side role {role} does not cover both rates: {sorted(rates)}")
+        if profiles != expected_profiles:
+            raise RuntimeError(
+                f"Training-side role {role} does not cover all six profiles: {sorted(profiles)}"
+            )
+
     return buckets, pd.DataFrame(audit_rows)
 
 
