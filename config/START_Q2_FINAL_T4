@@ -1,0 +1,13 @@
+{
+  "release": true,
+  "design_fully_frozen": true,
+  "frozen_model": "IUW-TCN",
+  "feature_mode": "raw_w",
+  "predictors": ["Voltage_V", "Current_A", "Wavelength_1", "Wavelength_2"],
+  "delta_t_decision": "DROP",
+  "cqr_decision": "DROP",
+  "selected_uq_method": "residual_split_conformal",
+  "publication_seeds": [0, 1, 2, 3, 4],
+  "formal_t4_protocol": "cross_rate_unseen_profile_12_splits",
+  "representation_or_architecture_search_allowed_after_release": false
+}
