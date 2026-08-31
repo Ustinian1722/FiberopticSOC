@@ -1,0 +1,6 @@
+release=true
+source=zenodo_15388590
+archive=Referenceless_Strain_calibrations.zip
+expected_md5=cad69880d6015c91226ed69844508a65
+purpose=label_reconstruction_and_calibration_structure_audit
+architecture_selection_allowed=false
