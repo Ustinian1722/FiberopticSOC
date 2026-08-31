@@ -1,0 +1,66 @@
+name: Q2 one-time canonical source copyedit
+
+on:
+  push:
+    branches: [research/eo-gated-mamba-paper]
+    paths:
+      - ".github/workflows/q2-final-source-copyedit.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  copyedit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/eo-gated-mamba-paper
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Apply bounded source-level copyedit
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          files = [
+              Path('docs/Q2_ABSTRACT_EN_FINAL.md'),
+              Path('docs/Q2_ENGLISH_FRONT_INTRO_V2.md'),
+              Path('docs/Q2_ENGLISH_SECTIONS4_6_V2.md'),
+              Path('docs/Q2_MAIN_FIGURE_CAPTIONS_EN.md'),
+          ]
+          replacements = {
+              'statistically comparable': 'closely comparable',
+              'RA-FBG-TCN therefore ranks third rather than first in this direction': 'RA-FBG-TCN ranks third rather than first in this direction',
+              'The strict benchmark therefore supports the proposed TCN': 'The strict benchmark supports the proposed TCN',
+              'The multi-seed result therefore provides the more conservative estimate': 'The multi-seed result provides the more conservative estimate',
+              'directly using native wavelength coordinates therefore does not introduce': 'directly using native wavelength coordinates does not introduce',
+              'The physical decoupling is therefore not invalid': 'The physical decoupling is not invalid',
+              'A compact SOC estimator can therefore use': 'A compact SOC estimator can use',
+              'The analysis therefore does not require': 'The analysis does not require',
+              'Conventional interpolation accuracy is therefore not treated': 'Conventional interpolation accuracy is not treated',
+              'Future work should therefore focus': 'Future work should focus',
+          }
+          for path in files:
+              text = path.read_text(encoding='utf-8')
+              for old, new in replacements.items():
+                  text = text.replace(old, new)
+              path.write_text(text, encoding='utf-8')
+          PY
+      - name: Verify bounded edits
+        run: |
+          ! grep -R -F 'statistically comparable' docs/Q2_ABSTRACT_EN_FINAL.md docs/Q2_ENGLISH_FRONT_INTRO_V2.md docs/Q2_ENGLISH_SECTIONS4_6_V2.md docs/Q2_MAIN_FIGURE_CAPTIONS_EN.md
+          grep -F 'closely comparable' docs/Q2_ABSTRACT_EN_FINAL.md
+          grep -F 'closely comparable' docs/Q2_ENGLISH_SECTIONS4_6_V2.md
+      - name: Commit canonical copyedit
+        run: |
+          git config user.name "RuiSearch"
+          git config user.email "90998393+Ustinian1722@users.noreply.github.com"
+          git add docs/Q2_ABSTRACT_EN_FINAL.md docs/Q2_ENGLISH_FRONT_INTRO_V2.md docs/Q2_ENGLISH_SECTIONS4_6_V2.md docs/Q2_MAIN_FIGURE_CAPTIONS_EN.md
+          if git diff --cached --quiet; then
+            echo 'No source edits required'
+          else
+            git commit -m 'paper: final canonical source copyedit [skip ci]'
+            git push origin HEAD:research/eo-gated-mamba-paper
+          fi
