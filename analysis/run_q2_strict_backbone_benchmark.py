@@ -74,6 +74,8 @@ def main() -> None:
     p.add_argument("--epoch-plan", type=Path, required=True)
     p.add_argument("--out-dir", type=Path, required=True)
     p.add_argument("--direction", choices=DIRECTIONS, required=True)
+    p.add_argument("--model", choices=MODELS, default=None,
+                   help="Execution-only shard. Omit to run the frozen full model list.")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--window", type=int, default=64)
     p.add_argument("--train-stride", type=int, default=4)
@@ -87,6 +89,7 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_rate, test_rate = rates(args.direction)
     args.out_dir.mkdir(parents=True, exist_ok=True)
+    models_to_run = (args.model,) if args.model else MODELS
 
     rows: list[dict] = []
     for profile in PROFILES:
@@ -104,9 +107,7 @@ def main() -> None:
         epoch = selected_epoch(plan, args.direction, profile)
 
         print(f"\n=== {args.direction}/{profile} epoch={epoch} train={len(train_ds)} test={len(test_ds)} ===")
-        for model_name in MODELS:
-            # Identical RNG reset before construction/training makes the comparison reproducible
-            # and prevents model-order changes from perturbing later initializations/shuffles.
+        for model_name in models_to_run:
             seed_everything(args.seed)
             model = build_model(model_name, args.window)
             train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=0)
