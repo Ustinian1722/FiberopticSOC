@@ -9,8 +9,8 @@ import pandas as pd
 
 CELLS = ("P1", "P2")
 TIME_COL = "Time / yyyy-mm-ddTHH:MM:SS.FFF"
-BLOCK_GAP_S = 300.0
-MIN_BLOCK_SAMPLES = 50
+REST_THRESHOLDS_A = (0.05, 0.1, 0.2, 0.5, 1.0)
+LONG_REST_MIN_S = 3600.0
 
 
 def integrate_signed_ah(t: pd.Series, i: np.ndarray) -> float:
@@ -23,137 +23,120 @@ def integrate_signed_ah(t: pd.Series, i: np.ndarray) -> float:
     return float(total)
 
 
-def scan_cell_blocks(df: pd.DataFrame, cell: str, q_ref: float) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
-    i = pd.to_numeric(df[f"I_{cell} / A"], errors="coerce").to_numpy(float)
-    u = pd.to_numeric(df[f"U_{cell} / V"], errors="coerce").to_numpy(float)
-    s5 = pd.to_numeric(df[f"{cell}S5 / nm"], errors="coerce").to_numpy(float)
-    t = pd.to_datetime(df[TIME_COL], errors="coerce")
-    valid = np.isfinite(i) & np.isfinite(u) & np.isfinite(s5) & t.notna().to_numpy()
+def contiguous_runs(mask: np.ndarray) -> list[tuple[int, int]]:
+    if len(mask) == 0:
+        return []
+    changes = np.r_[True, mask[1:] != mask[:-1]]
+    starts = np.flatnonzero(changes)
+    ends = np.r_[starts[1:] - 1, len(mask) - 1]
+    return [(int(a), int(b)) for a, b in zip(starts, ends) if bool(mask[a])]
+
+
+def summarize_interval(cell: str, phase_id: int, t: pd.Series, i: np.ndarray, u: np.ndarray, s5: np.ndarray, a: int, b: int, kind: str) -> dict:
+    ti = t.iloc[a:b + 1].reset_index(drop=True)
+    ii, uu, ss = i[a:b + 1], u[a:b + 1], s5[a:b + 1]
+    return {
+        "cell": cell,
+        "phase_id": phase_id,
+        "kind": kind,
+        "start_time": str(ti.iloc[0]),
+        "end_time": str(ti.iloc[-1]),
+        "n_samples": int(len(ii)),
+        "duration_s": float((ti.iloc[-1] - ti.iloc[0]).total_seconds()),
+        "signed_Ah_positive_discharge": integrate_signed_ah(ti, ii),
+        "current_mean_A": float(np.nanmean(ii)),
+        "current_std_A": float(np.nanstd(ii)),
+        "current_min_A": float(np.nanmin(ii)),
+        "current_max_A": float(np.nanmax(ii)),
+        "positive_current_fraction": float(np.mean(ii > 0.05)),
+        "negative_current_fraction": float(np.mean(ii < -0.05)),
+        "voltage_start_V": float(uu[0]),
+        "voltage_end_V": float(uu[-1]),
+        "voltage_min_V": float(np.nanmin(uu)),
+        "voltage_max_V": float(np.nanmax(uu)),
+        "S5_start_nm": float(ss[0]),
+        "S5_end_nm": float(ss[-1]),
+        "S5_delta_end_nm": float(ss[-1] - ss[0]),
+    }
+
+
+def audit_cell(df: pd.DataFrame, cell: str, q_ref: float) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
+    i0 = pd.to_numeric(df[f"I_{cell} / A"], errors="coerce").to_numpy(float)
+    u0 = pd.to_numeric(df[f"U_{cell} / V"], errors="coerce").to_numpy(float)
+    s0 = pd.to_numeric(df[f"{cell}S5 / nm"], errors="coerce").to_numpy(float)
+    t0 = pd.to_datetime(df[TIME_COL], errors="coerce")
+    valid = np.isfinite(i0) & np.isfinite(u0) & np.isfinite(s0) & t0.notna().to_numpy()
     idx = np.flatnonzero(valid)
     if len(idx) < 2:
-        raise RuntimeError(f"insufficient valid WLTP data for {cell}")
-
-    i = i[idx]
-    u = u[idx]
-    s5 = s5[idx]
-    t = t.iloc[idx].reset_index(drop=True)
+        raise RuntimeError(f"insufficient WLTP data for {cell}")
+    i, u, s5 = i0[idx], u0[idx], s0[idx]
+    t = t0.iloc[idx].reset_index(drop=True)
     dt = t.diff().dt.total_seconds().to_numpy(float)
+    finite_dt = dt[np.isfinite(dt) & (dt > 0) & (dt <= 30.0)]
 
-    new_block = np.ones(len(t), dtype=bool)
-    if len(t) > 1:
-        new_block[1:] = (~np.isfinite(dt[1:])) | (dt[1:] <= 0) | (dt[1:] > BLOCK_GAP_S)
-    block_id = np.cumsum(new_block) - 1
-
-    rows = []
-    unique_blocks = np.unique(block_id)
-    for bid in unique_blocks:
-        mask = block_id == bid
-        pos = np.flatnonzero(mask)
-        if len(pos) < MIN_BLOCK_SAMPLES:
-            continue
-        a, b = int(pos[0]), int(pos[-1])
-        ib, ub, sb = i[a:b + 1], u[a:b + 1], s5[a:b + 1]
-        tb = t.iloc[a:b + 1].reset_index(drop=True)
-        duration = float((tb.iloc[-1] - tb.iloc[0]).total_seconds())
-        signed_ah = integrate_signed_ah(tb, ib)
-        current_std = float(np.nanstd(ib))
-        imin, imax = float(np.nanmin(ib)), float(np.nanmax(ib))
-        pos_frac = float(np.mean(ib > 0.05))
-        neg_frac = float(np.mean(ib < -0.05))
-        looks_dynamic = bool(
-            len(ib) >= 500
-            and duration >= 300.0
-            and imin < -5.0
-            and imax > 5.0
-            and current_std >= 3.0
-        )
-        gap_before_s = float(dt[a]) if a > 0 and np.isfinite(dt[a]) else np.nan
-        rows.append({
-            "cell": cell,
-            "block_id": int(bid),
-            "start_time": str(tb.iloc[0]),
-            "end_time": str(tb.iloc[-1]),
-            "n_samples": int(len(ib)),
-            "duration_s": duration,
-            "gap_before_s": gap_before_s,
-            "signed_Ah_positive_discharge": signed_ah,
-            "current_mean_A": float(np.nanmean(ib)),
-            "current_std_A": current_std,
-            "current_min_A": imin,
-            "current_max_A": imax,
-            "positive_current_fraction": pos_frac,
-            "negative_current_fraction": neg_frac,
-            "voltage_start_V": float(ub[0]),
-            "voltage_end_V": float(ub[-1]),
-            "voltage_min_V": float(np.nanmin(ub)),
-            "voltage_max_V": float(np.nanmax(ub)),
-            "S5_start_nm": float(sb[0]),
-            "S5_end_nm": float(sb[-1]),
-            "S5_delta_end_nm": float(sb[-1] - sb[0]),
-            "looks_dynamic_WLTP": looks_dynamic,
-        })
-
-    blocks = pd.DataFrame(rows).sort_values("start_time").reset_index(drop=True)
-    dynamic = blocks[blocks.looks_dynamic_WLTP].copy().reset_index(drop=True)
-    if dynamic.empty:
-        raise RuntimeError(f"no dynamic WLTP-like blocks detected for {cell}")
-
-    soc_cursor = 1.0
-    episode_rows = []
-    prev_end = None
-    for j, r in dynamic.iterrows():
-        net_ah = float(r.signed_Ah_positive_discharge)
-        soc_start = soc_cursor
-        soc_end = soc_start - net_ah / q_ref
-        gap_from_prev = np.nan
-        if prev_end is not None:
-            gap_from_prev = (pd.Timestamp(r.start_time) - prev_end).total_seconds()
-        episode_rows.append({
-            "cell": cell,
-            "episode": int(j + 1),
-            "source_block_id": int(r.block_id),
-            "start_time": r.start_time,
-            "end_time": r.end_time,
-            "gap_from_previous_dynamic_s": gap_from_prev,
-            "n_samples": int(r.n_samples),
-            "duration_s": float(r.duration_s),
-            "net_Ah_positive_discharge": net_ah,
-            "SOC_start_from_Qref": soc_start,
-            "SOC_end_from_Qref": soc_end,
-            "voltage_start_V": float(r.voltage_start_V),
-            "voltage_end_V": float(r.voltage_end_V),
-            "voltage_min_V": float(r.voltage_min_V),
-            "current_min_A": float(r.current_min_A),
-            "current_max_A": float(r.current_max_A),
-            "S5_start_nm": float(r.S5_start_nm),
-            "S5_end_nm": float(r.S5_end_nm),
-            "S5_delta_end_nm": float(r.S5_delta_end_nm),
-            "net_discharge_is_positive": bool(net_ah > 0),
-        })
-        soc_cursor = soc_end
-        prev_end = pd.Timestamp(r.end_time)
-
-    episodes = pd.DataFrame(episode_rows)
-    all_good_dt = dt[np.isfinite(dt) & (dt > 0) & (dt <= 30.0)]
+    q = np.quantile(np.abs(i), [0, .01, .05, .10, .25, .50, .75, .90, .95, .99, 1.0])
     summary = {
         "cell": cell,
-        "Q_ref_Ah": float(q_ref),
-        "n_valid_samples": int(len(t)),
-        "median_contiguous_dt_s": float(np.median(all_good_dt)),
-        "p95_contiguous_dt_s": float(np.quantile(all_good_dt, 0.95)),
-        "n_blocks_ge_50_samples": int(len(blocks)),
-        "n_dynamic_WLTP_blocks": int(len(dynamic)),
-        "all_dynamic_blocks_net_discharge_positive": bool((episodes.net_Ah_positive_discharge > 0).all()),
-        "dynamic_total_net_discharge_Ah": float(episodes.net_Ah_positive_discharge.sum()),
-        "dynamic_final_SOC_from_Qref": float(episodes.SOC_end_from_Qref.iloc[-1]),
-        "first_dynamic_voltage_start_V": float(episodes.voltage_start_V.iloc[0]),
-        "last_dynamic_voltage_end_V": float(episodes.voltage_end_V.iloc[-1]),
-        "last_dynamic_voltage_min_V": float(episodes.voltage_min_V.iloc[-1]),
-        "max_abs_dynamic_current_A": float(max(abs(episodes.current_min_A.min()), abs(episodes.current_max_A.max()))),
-        "max_abs_dynamic_C_rate_from_Qref": float(max(abs(episodes.current_min_A.min()), abs(episodes.current_max_A.max())) / q_ref),
-        "S5_valid_fraction": 1.0,
+        "Q_ref_Ah": q_ref,
+        "n_valid_samples": int(len(i)),
+        "median_dt_s": float(np.median(finite_dt)),
+        "p95_dt_s": float(np.quantile(finite_dt, .95)),
+        "voltage_min_V": float(np.nanmin(u)),
+        "voltage_max_V": float(np.nanmax(u)),
+        "current_min_A": float(np.nanmin(i)),
+        "current_max_A": float(np.nanmax(i)),
+        "abs_current_quantiles_A": {k: float(v) for k, v in zip(["p0","p1","p5","p10","p25","p50","p75","p90","p95","p99","p100"], q)},
     }
-    return summary, blocks, episodes
+
+    rest_rows = []
+    all_threshold_phase_rows = []
+    for threshold in REST_THRESHOLDS_A:
+        mask = np.abs(i) <= threshold
+        long_rests = []
+        for a, b in contiguous_runs(mask):
+            dur = float((t.iloc[b] - t.iloc[a]).total_seconds())
+            if dur >= LONG_REST_MIN_S:
+                long_rests.append((a, b, dur))
+                rest_rows.append({
+                    "cell": cell,
+                    "threshold_A": threshold,
+                    "start_time": str(t.iloc[a]),
+                    "end_time": str(t.iloc[b]),
+                    "duration_s": dur,
+                    "n_samples": int(b - a + 1),
+                    "current_mean_A": float(np.nanmean(i[a:b+1])),
+                    "current_abs_max_A": float(np.nanmax(np.abs(i[a:b+1]))),
+                    "voltage_start_V": float(u[a]),
+                    "voltage_end_V": float(u[b]),
+                })
+
+        # Build non-rest phases only for each threshold to see which threshold reproduces repeated WLTP blocks.
+        bounds = []
+        cur = 0
+        for a, b, _ in long_rests:
+            if a > cur:
+                bounds.append((cur, a - 1))
+            cur = b + 1
+        if cur < len(i):
+            bounds.append((cur, len(i) - 1))
+        for phase_id, (a, b) in enumerate(bounds, 1):
+            if b - a + 1 < 100:
+                continue
+            row = summarize_interval(cell, phase_id, t, i, u, s5, a, b, "between_long_rests")
+            row["rest_threshold_A"] = threshold
+            row["looks_WLTP_dynamic"] = bool(
+                row["n_samples"] >= 500
+                and row["current_min_A"] < -5.0
+                and row["current_max_A"] > 5.0
+                and row["current_std_A"] >= 3.0
+            )
+            all_threshold_phase_rows.append(row)
+
+    summary["long_rest_counts"] = {
+        str(th): int(sum(1 for r in rest_rows if abs(r["threshold_A"] - th) < 1e-12))
+        for th in REST_THRESHOLDS_A
+    }
+    return summary, pd.DataFrame(rest_rows), pd.DataFrame(all_threshold_phase_rows)
 
 
 def main() -> None:
@@ -170,32 +153,26 @@ def main() -> None:
         usecols += [f"I_{c} / A", f"U_{c} / V", f"{c}S5 / nm"]
     df = pd.read_csv(args.wltp_csv, usecols=usecols, low_memory=False)
 
-    summaries = []
-    blocks_all = []
-    episodes_all = []
+    summaries, rests_all, phases_all = [], [], []
     for c in CELLS:
-        summary, blocks, episodes = scan_cell_blocks(df, c, float(qmap[c]))
+        summary, rests, phases = audit_cell(df, c, float(qmap[c]))
         summaries.append(summary)
-        blocks_all.append(blocks)
-        episodes_all.append(episodes)
+        rests_all.append(rests)
+        phases_all.append(phases)
 
-    summary_df = pd.DataFrame(summaries)
-    blocks_df = pd.concat(blocks_all, ignore_index=True)
-    episodes_df = pd.concat(episodes_all, ignore_index=True)
-
+    rests_df = pd.concat(rests_all, ignore_index=True) if rests_all else pd.DataFrame()
+    phases_df = pd.concat(phases_all, ignore_index=True) if phases_all else pd.DataFrame()
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    summary_df.to_csv(args.out_dir / "wltp_cell_summary.csv", index=False)
-    blocks_df.to_csv(args.out_dir / "wltp_all_contiguous_blocks.csv", index=False)
-    episodes_df.to_csv(args.out_dir / "wltp_dynamic_episode_summary.csv", index=False)
-    (args.out_dir / "wltp_audit_summary.json").write_text(
-        json.dumps({"cells": summaries}, indent=2), encoding="utf-8"
-    )
-    print("=== WLTP cell summary ===")
-    print(summary_df.to_string(index=False))
-    print("=== all contiguous blocks ===")
-    print(blocks_df.to_string(index=False))
-    print("=== dynamic WLTP blocks with cumulative SOC ===")
-    print(episodes_df.to_string(index=False))
+    pd.DataFrame([{k: v for k, v in s.items() if k != "abs_current_quantiles_A"} | {f"absI_{q}": val for q, val in s["abs_current_quantiles_A"].items()} for s in summaries]).to_csv(args.out_dir / "wltp_cell_summary.csv", index=False)
+    rests_df.to_csv(args.out_dir / "wltp_long_rest_threshold_scan.csv", index=False)
+    phases_df.to_csv(args.out_dir / "wltp_phase_threshold_scan.csv", index=False)
+    (args.out_dir / "wltp_audit_summary.json").write_text(json.dumps({"cells": summaries}, indent=2), encoding="utf-8")
+    print("=== WLTP summary ===")
+    print(json.dumps({"cells": summaries}, indent=2))
+    print("=== long rest threshold scan ===")
+    print(rests_df.to_string(index=False))
+    print("=== phases between long rests ===")
+    print(phases_df.to_string(index=False))
 
 
 if __name__ == "__main__":
