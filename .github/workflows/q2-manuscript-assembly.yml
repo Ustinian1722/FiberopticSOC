@@ -8,8 +8,9 @@ on:
       - "docs/Q2_ENGLISH_FRONT_INTRO_V1.md"
       - "docs/Q2_ABSTRACT_EN_FINAL.md"
       - "docs/Q2_ENGLISH_SECTIONS2_3_V1.md"
-      - "docs/Q2_ENGLISH_SECTIONS4_6_V1.md"
+      - "docs/Q2_ENGLISH_SECTIONS4_6_V2.md"
       - "docs/Q2_MAIN_FIGURE_CAPTIONS_EN.md"
+      - "docs/Q2_REFERENCES_EN_CORE.md"
       - "analysis/assemble_q2_english_manuscript.py"
       - ".github/workflows/q2-manuscript-assembly.yml"
 
@@ -24,18 +25,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Assemble and lint manuscript
+      - name: Assemble and lint manuscript V2
         run: python analysis/assemble_q2_english_manuscript.py
-      - name: Verify manuscript contract
+      - name: Verify manuscript V2 contract
         run: |
-          test -s paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V1.md
-          test -s paper/manuscript/Q2_ENGLISH_MANUSCRIPT_ASSEMBLY_REPORT.md
-          grep -F '# 6. Conclusion' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V1.md
-          grep -F '48.52%' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V1.md
-          grep -F '95.04%' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V1.md
-          grep -F 'final abstract length: **250 words**' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_ASSEMBLY_REPORT.md
+          test -s paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
+          test -s paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2_ASSEMBLY_REPORT.md
+          grep -F '# 6. Conclusion' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
+          grep -F '# References' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
+          grep -F '48.52%' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
+          grep -F '95.04%' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
+          grep -F 'one physical cell instrumented with a fixed dual-FBG' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
+          grep -F 'no formal 95% coverage guarantee' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2.md
+          grep -F 'reviewer-risk safeguards: **PASS**' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2_ASSEMBLY_REPORT.md
+          grep -F 'final abstract length: **250 words**' paper/manuscript/Q2_ENGLISH_MANUSCRIPT_V2_ASSEMBLY_REPORT.md
       - uses: actions/upload-artifact@v4
         with:
-          name: q2-english-manuscript-v1
+          name: q2-english-manuscript-v2
           path: paper/manuscript/**
           retention-days: 90
