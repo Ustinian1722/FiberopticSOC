@@ -1,0 +1,174 @@
+name: Q2 paper-completion strict benchmark and ablation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/eo-gated-mamba-paper]
+    paths:
+      - "config/START_Q2_PAPER_COMPLETION_EXPERIMENTS"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: q2-paper-completion-experiments
+  cancel-in-progress: false
+
+env:
+  OMP_NUM_THREADS: "4"
+  MKL_NUM_THREADS: "4"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scipy==1.17.1 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Verify frozen release contract and imports
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          latch=json.loads(Path('config/START_Q2_PAPER_COMPLETION_EXPERIMENTS').read_text())
+          assert latch['release'] is True
+          assert latch['backbone_seed'] == 42
+          assert latch['ablation_seeds'] == [0,1,2,3,4]
+          assert latch['models_backbone'] == ['CNN','GRU','LSTM','Transformer','CGA-Matched','DualTCN-Transformer','RA-FBG-TCN']
+          assert latch['models_ablation'] == ['VI','VI+TF','VI+W']
+          import sys
+          sys.path.insert(0,'analysis')
+          import run_q2_strict_backbone_benchmark as b
+          import run_q2_strict_input_ablation as a
+          for name in b.MODELS:
+              m=b.build_model(name,64)
+          for name in a.MODELS:
+              m=a.build_model(name)
+          print('paper-completion frozen contract/import smoke: PASS')
+          PY
+          test -f SiC-18.zip
+          echo "8ebc43eb6d205dfc573dae853d63efcd1a00169be9d2f1e512b9220ea7799bc4  SiC-18.zip" | sha256sum -c -
+
+  backbone:
+    needs: smoke
+    strategy:
+      fail-fast: false
+      matrix:
+        direction: [1C_to_2C, 2C_to_1C]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage data
+        run: |
+          mkdir -p data/extracted/SiC-18
+          unzip -q SiC-18.zip -d data/extracted/SiC-18
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scipy==1.17.1 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Run strict backbone benchmark
+        run: |
+          python analysis/run_q2_strict_backbone_benchmark.py \
+            --data data/extracted/SiC-18 \
+            --epoch-plan config/q2_frozen_epoch_plan.csv \
+            --out-dir results/backbone/${{ matrix.direction }} \
+            --direction ${{ matrix.direction }} \
+            --seed 42 --window 64 --train-stride 4 --test-stride 1 --batch-size 256 --lr 1e-3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paper-backbone-${{ matrix.direction }}
+          path: results/backbone/${{ matrix.direction }}/**
+          retention-days: 90
+
+  ablation:
+    needs: smoke
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        direction: [1C_to_2C, 2C_to_1C]
+        seed: [0, 1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage data
+        run: |
+          mkdir -p data/extracted/SiC-18
+          unzip -q SiC-18.zip -d data/extracted/SiC-18
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2 openpyxl==3.1.5 scipy==1.17.1 scikit-learn==1.8.0
+          python -m pip install --disable-pip-version-check torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Run five-seed strict input ablation
+        run: |
+          python analysis/run_q2_strict_input_ablation.py \
+            --data data/extracted/SiC-18 \
+            --epoch-plan config/q2_frozen_epoch_plan.csv \
+            --out-dir results/ablation/${{ matrix.direction }}/seed_${{ matrix.seed }} \
+            --direction ${{ matrix.direction }} --seed ${{ matrix.seed }} \
+            --window 64 --train-stride 4 --test-stride 1 --batch-size 256 --lr 1e-3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paper-ablation-${{ matrix.direction }}-seed-${{ matrix.seed }}
+          path: results/ablation/${{ matrix.direction }}/seed_${{ matrix.seed }}/**
+          retention-days: 90
+
+  aggregate:
+    needs: [backbone, ablation]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: paper-backbone-*
+          path: downloaded/backbone
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: paper-ablation-*
+          path: downloaded/ablation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --disable-pip-version-check numpy==2.3.2 pandas==2.3.2
+      - name: Aggregate manuscript tables
+        run: |
+          python analysis/aggregate_q2_paper_completion_experiments.py \
+            --benchmark-root downloaded/backbone \
+            --ablation-root downloaded/ablation \
+            --out-dir results/paper_completion_summary --bootstrap 20000
+      - name: Publish paper-ready summary
+        shell: bash
+        run: |
+          echo '## Strict backbone benchmark' >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          cat results/paper_completion_summary/manuscript_backbone_table.csv >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo '## Five-seed strict input ablation' >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          cat results/paper_completion_summary/manuscript_ablation_table.csv >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          cat results/paper_completion_summary/ablation_paired_summary.csv >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: q2-paper-completion-summary
+          path: results/paper_completion_summary/**
+          retention-days: 90
