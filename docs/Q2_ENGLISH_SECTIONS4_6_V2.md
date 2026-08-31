@@ -10,7 +10,7 @@ Point-estimation performance is evaluated using mean absolute error (MAE), root 
 
 Two data regimes are emphasized. The first is a blocked mixed-condition interpolation setting, which evaluates conventional SOC estimation when the operating distribution is well represented during training. The second is a strict cross-rate plus unseen-profile setting. For each held-out case, the model is trained on five complete driving profiles from one C-rate and evaluated on the sixth profile at the opposite C-rate, while the same named profile is excluded from training. Thus, both C-rate and driving-profile changes occur simultaneously.
 
-For the strict backbone comparison, all candidate models receive the same V/I/W1/W2 inputs and use seed 42. To avoid target-dependent early stopping, each held-out split is trained for the source-only epoch count frozen before target evaluation. The five-seed input ablation and final RA-FBG-TCN generalization study use seeds 0–4 and the same source-only frozen epoch plan. This separates architecture comparison from initialization-robustness reporting while preserving the same test protocol.
+For the strict backbone comparison, all candidate models receive the same V/I/W1/W2 inputs and use seed 42. To avoid target-dependent early stopping, each held-out split is trained for the same source-only epoch budget frozen before target evaluation. This is an equal-budget architecture comparison rather than a model-specific hyperparameter search. The five-seed input ablation and final RA-FBG-TCN generalization study use seeds 0–4 and the same source-only frozen epoch plan. This separates architecture comparison from initialization-robustness reporting while preserving the same test protocol.
 
 ## 4.2. Conventional SOC estimation performance
 
@@ -65,17 +65,19 @@ To isolate the effect of FBG information from architecture capacity, the same 11
 | 2C→1C | VI+TF | 0.493 | 0.605 | 0.999569 | 1.153 |
 | 2C→1C | VI+W | 0.806 | 0.988 | 0.998480 | 1.830 |
 
-For 1C→2C transfer, adding native W1/W2 reduces the electrical-only MAE from 2.162% to 1.795% SOC, corresponding to an approximately 17.0% relative reduction. VI+W wins 20 of the 30 paired seed×profile comparisons. The seed-cluster bootstrap 95% confidence interval for the absolute MAE gain is approximately +0.004 to +0.907 percentage points. The paired difference is also supported by a paired t-test (p=0.0288) and Wilcoxon signed-rank test (p=0.0208). Thus, dual-FBG information provides measurable benefit in the difficult low-to-high-rate transfer.
+For 1C→2C transfer, adding native W1/W2 reduces the electrical-only MAE from 2.162% to 1.795% SOC, corresponding to an approximately 17.0% relative reduction. VI+W wins 20 of the 30 matched seed×profile comparisons. Because the results are clustered by random initialization, the primary uncertainty summary is a seed-cluster bootstrap: its 95% confidence interval for the absolute MAE gain is approximately +0.004 to +0.907 percentage points. Thus, dual-FBG information provides measurable benefit in the difficult low-to-high-rate transfer without relying on a single favorable initialization.
 
-The formal ablation also refines the interpretation of the optical representation. VI+TF obtains an MAE of 1.770% SOC and VI+W 1.795% SOC in 1C→2C transfer. Their paired difference is not significant (paired t-test p=0.746; Wilcoxon p=0.903), indicating comparable predictive performance rather than universal superiority of one coordinate system. Native W1/W2 remains the retained representation because it was selected in the pre-frozen development comparison, is directly measured, and avoids an additional coordinate inversion. T/F remains useful for physical interpretation and achieves essentially the same level of difficult-transfer performance in the formal multi-seed test.
+The formal ablation also refines the interpretation of the optical representation. VI+TF obtains an MAE of 1.770% SOC and VI+W 1.795% SOC in 1C→2C transfer. Their seed/profile-level performance is closely matched and the seed-cluster comparison does not support a stable practical advantage for either coordinate system. Native W1/W2 remains the retained representation because it was selected in the pre-frozen development comparison, is directly measured, and avoids an additional coordinate inversion. T/F remains useful for physical interpretation and achieves essentially the same level of difficult-transfer performance in the formal multi-seed test.
 
 The reverse 2C→1C direction shows a different pattern. Electrical-only VI achieves the lowest MAE of 0.464% SOC, followed by VI+TF at 0.493% and VI+W at 0.806%. This direction dependence indicates that the benefit of optical sensing is tied to the amount of source-domain electrical support rather than being a universal gain from adding more channels.
 
 ## 4.5. Electrical–optical complementarity under increasing distribution shift
 
-The preceding ablation shows that FBG input is helpful for 1C→2C but unnecessary in the easier reverse direction. To examine this difference at the window level, an electrical support envelope is defined from the 0.5th–99.5th percentile range of source-training current. For each test window, the proportion of current samples outside this envelope is defined as the electrical-OOD fraction. The score uses only source-current statistics and observed current; target SOC labels are not involved.
+The preceding five-seed ablation is the primary evidence for the contribution of FBG sensing. The following OOD analysis is a fixed development diagnostic used only to interpret why the optical contribution changes with transfer direction; it is not used to select or rescue the final model.
 
-The OOD diagnostic uses a parameter-matched development comparison of VI and VI+W. In the complete 1C→2C development set, the VI MAE is 2.151% SOC and the corresponding VI+W MAE is 1.632% SOC. More importantly, the optical contribution changes systematically with OOD severity, as summarized in Table 6 and Fig. 5.
+An electrical support envelope is defined from the 0.5th–99.5th percentile range of source-training current. For each test window, the proportion of current samples outside this envelope is defined as the electrical-OOD fraction. The score uses only source-current statistics and observed current; target SOC labels are not involved.
+
+In the complete 1C→2C development diagnostic, the parameter-matched VI MAE is 2.151% SOC and the corresponding VI+W MAE is 1.632% SOC. More importantly, the optical contribution changes systematically with OOD severity, as summarized in Table 6 and Fig. 5.
 
 **Table 6. Electrical–optical comparison under increasing electrical-OOD severity for 1C→2C transfer.**
 
@@ -103,7 +105,7 @@ The aggregate results are shown in Table 7 and Fig. 6. For 1C→2C transfer, RA-
 | 2C→1C | **0.806** | **0.988** | **0.998480** | **1.830** |
 | Overall | **1.301** | — | — | — |
 
-The five-seed values are deliberately reported in addition to the seed-42 architecture benchmark because the 1C→2C direction exhibits meaningful initialization sensitivity. The multi-seed result therefore provides the more conservative estimate of final-model robustness, whereas Table 4 provides a controlled architecture comparison under one common seed. The directional asymmetry remains consistent across analyses: 2C→1C is substantially easier than 1C→2C.
+The five-seed values are deliberately reported in addition to the seed-42 architecture benchmark because the 1C→2C direction exhibits meaningful initialization sensitivity. The multi-seed result therefore provides the more conservative estimate of final-model robustness, whereas Table 4 provides a controlled equal-budget architecture comparison under one common seed. The directional asymmetry remains consistent across analyses: 2C→1C is substantially easier than 1C→2C.
 
 ## 4.7. Wavelength-noise robustness and conformal uncertainty
 
