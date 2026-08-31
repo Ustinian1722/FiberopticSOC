@@ -129,20 +129,41 @@ This is consistent with the source publication's evidence that adhesive aging/de
 
 ## 8. External same-cell cross-rate evidence — E2
 
-Status: **PENDING frozen run `33360769760`**.
+### Frozen partial/negative robust-gate result
 
-Frozen direction:
+Run `33360769760`: each physical cell is trained on its own 0.2C+0.5C discharges and tested on held-out 1C; VI-TCN and VI-S5rel-TCN use the same frozen external architecture and source-rate-only normalization.
 
-- same physical cell;
-- train 0.2C + 0.5C;
-- test 1C;
-- A1/A2/P1/P2 as four paired replications;
-- VI-TCN vs VI-S5rel-TCN;
-- no architecture or preprocessing search.
+Equal-cell means:
 
-E2 will determine whether the external surface-FBG signal helps rate extrapolation when sensor identity is fixed. It cannot overwrite the E1 cross-cell conclusion.
+- VI-TCN: MAE `0.149199`, RMSE `0.175529`, Q95-AE `0.305993`;
+- VI-S5rel-TCN: MAE `0.134241`, RMSE `0.164119`, Q95-AE `0.312989`.
 
-## 9. Recommended manuscript thesis
+S5rel improves MAE in 3/4 cells:
+
+- A1: `-27.92%` relative MAE;
+- A2: `-5.34%`;
+- P1: `-6.66%`;
+- P2: `+9.15%` degradation.
+
+Four of five pre-registered support criteria pass, but mean Q95-AE is worse, so the strict decision is `DOES_NOT_SUPPORT_ROBUST_SAME_CELL_CROSS_RATE_FBG_BENEFIT`.
+
+### Supported claim
+
+Once physical sensor identity is fixed, direct surface-FBG response contains useful same-cell rate-transfer information on average: mean MAE/RMSE improve and 3/4 cells benefit. However, high-error-tail reliability remains cell/condition dependent, so robust benefit is not established.
+
+### Do not claim
+
+- E2 fully passes the robustness gate;
+- universal same-cell cross-rate improvement;
+- E2 overrides the E1 cross-cell failure.
+
+## 9. External dynamic evidence — E3
+
+Status: **WLTP structure/SOC audit in progress; no model result yet**.
+
+Planned role: P1/P2 repeated WLTP provides a secondary dynamic-condition transfer test after the frozen E1/E2 evidence. Exact segmentation and optical reference rule must be fixed only after the no-model WLTP audit determines whether repeated WLTP blocks are one continuous discharge experiment separated by rests or independent fully recharged tests.
+
+## 10. Recommended manuscript thesis
 
 The paper should be framed as a **representation and domain-shift study for in-situ optical SOC estimation**, not as a generic new-network paper:
 
@@ -150,6 +171,6 @@ The paper should be framed as a **representation and domain-shift study for in-s
 2. compact causal modeling chosen through leakage-safe source-side evidence;
 3. simultaneous rate/profile OOD validation with multi-seed and sensor-noise robustness;
 4. uncertainty reporting without unnecessary UQ complexity;
-5. external multi-cell evidence defining the transfer boundary between same-sensor predictive utility and cross-sensor calibration dependence.
+5. external evidence defining the transfer boundary: strong calibration dependence across physical sensors/cells, useful mean same-sensor rate-transfer information, and explicitly tested tail-error limitations.
 
 The strongest novelty is the combination of rigorous representation evidence and deliberately hard generalization protocols, together with explicit reporting of where direct optical transfer does and does not hold.
